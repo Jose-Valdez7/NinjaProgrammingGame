@@ -1,3 +1,6 @@
+/* Importar animaciones de la historia */
+@import './styles/story-animations.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
