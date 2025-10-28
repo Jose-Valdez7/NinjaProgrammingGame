@@ -1,18 +1,69 @@
 import { Link } from 'react-router-dom'
-import { Play, Trophy, Settings, Info } from 'lucide-react'
+import { Play, Trophy, Settings, Info, BookOpen } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { StorySequence } from '../components/StorySequence'
 
 export default function HomePage() {
+  const [showStory, setShowStory] = useState(false);
+  const [hasSeenStory, setHasSeenStory] = useState(false);
+  const [isLoadingStory, setIsLoadingStory] = useState(false);
+
+  useEffect(() => {
+    // Verificar si el usuario ya vio la historia en esta sesión
+    const storySeen = sessionStorage.getItem('storySeen');
+    if (!storySeen) {
+      setIsLoadingStory(true);
+      // Mostrar la historia automáticamente después de 2 segundos
+      setTimeout(() => {
+        setShowStory(true);
+        setIsLoadingStory(false);
+      }, 2000);
+    } else {
+      setHasSeenStory(true);
+    }
+  }, []);
+
+  const handleStoryComplete = () => {
+    setShowStory(false);
+    setHasSeenStory(true);
+    sessionStorage.setItem('storySeen', 'true');
+  };
+
+  const handleShowStory = () => {
+    setIsLoadingStory(true);
+    setTimeout(() => {
+      setShowStory(true);
+      setIsLoadingStory(false);
+    }, 1000);
+  };
+
+  if (showStory) {
+    return <StorySequence onComplete={handleStoryComplete} autoStart={true} />;
+  }
+
+  if (isLoadingStory) {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 z-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-400 mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold text-white mb-2">Cargando Historia...</h2>
+          <p className="text-gray-300">Preparando la aventura de Debian</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-ninja-dark via-ninja-purple to-ninja-blue flex items-center justify-center">
       <div className="max-w-4xl mx-auto px-6 text-center">
         {/* Logo and Title */}
         <div className="mb-12">
           <h1 className="text-6xl font-bold text-white mb-4 font-game">
-            🥷 NINJA ENERGY QUEST
+            🥷 NINJA 404
           </h1>
           <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-            Programa tu camino hacia la victoria. Controla al ninja con comandos de código 
-            y atraviesa desafíos cada vez más complejos.
+            La historia de Debian y su aventura dentro del código. Programa tu camino hacia la victoria 
+            y ayuda a Debian a escapar del juego.
           </p>
         </div>
 
@@ -45,13 +96,23 @@ export default function HomePage() {
 
         {/* Action Buttons */}
         <div className="space-y-4">
-          <Link 
-            to="/game" 
-            className="ninja-button inline-flex items-center gap-3 text-lg px-8 py-4"
-          >
-            <Play size={24} />
-            Jugar Ahora
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button 
+              onClick={handleShowStory}
+              className="ninja-button inline-flex items-center gap-3 text-lg px-8 py-4"
+            >
+              <BookOpen size={24} />
+              {hasSeenStory ? 'Ver Historia' : 'Ver Historia Nuevamente'}
+            </button>
+            
+            <Link 
+              to="/game" 
+              className="ninja-button inline-flex items-center gap-3 text-lg px-8 py-4"
+            >
+              <Play size={24} />
+              Jugar Ahora
+            </Link>
+          </div>
           
           <div className="flex flex-wrap justify-center gap-4 mt-6">
             <Link 
