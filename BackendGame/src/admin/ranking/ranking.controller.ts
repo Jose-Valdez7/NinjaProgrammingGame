@@ -7,6 +7,7 @@ import { Role } from 'src/shared/auth/enums/role.enums';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaginationDto } from 'src/common/dtos/pagination.dto';
 
+@ApiTags('Rankings')
 @Controller('rankings')
 @ApiTags('Rankings')
 @UseGuards(AuthGuard, RolesGuard)

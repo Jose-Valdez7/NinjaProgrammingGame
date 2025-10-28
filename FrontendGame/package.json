@@ -10,16 +10,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@pixi/canvas-extract": "^7.4.3",
+    "@pixi/canvas-graphics": "^7.4.3",
+    "@pixi/canvas-renderer": "^7.4.3",
+    "@pixi/canvas-sprite": "^7.4.3",
+    "@pixi/canvas-text": "^7.4.3",
+    "axios": "^1.6.0",
+    "clsx": "^2.0.0",
+    "gsap": "^3.12.2",
+    "lucide-react": "^0.292.0",
+    "pixi.js": "^7.4.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "pixi.js": "^7.3.2",
-    "gsap": "^3.12.2",
-    "axios": "^1.6.0",
-    "zustand": "^4.4.6",
     "react-router-dom": "^6.18.0",
-    "lucide-react": "^0.292.0",
-    "clsx": "^2.0.0",
-    "tailwind-merge": "^2.0.0"
+    "tailwind-merge": "^2.0.0",
+    "zustand": "^4.4.6"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",
