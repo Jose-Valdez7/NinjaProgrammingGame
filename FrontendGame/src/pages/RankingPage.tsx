@@ -5,6 +5,9 @@ import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
 
 export default function RankingPage() {
   const [rankings, setRankings] = useState<any[]>([])
+  const [meta, setMeta] = useState<any>(null)
+  const [page, setPage] = useState(1)
+  const [limit] = useState(10)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showLogin, setShowLogin] = useState(false)
@@ -14,9 +17,9 @@ export default function RankingPage() {
   const [loggingIn, setLoggingIn] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
 
-  const fetchRankings = async () => {
+  const fetchRankings = async (p = 1) => {
     try {
-      const res = await fetch(apiUrl('api/rankings'), {
+      const res = await fetch(apiUrl(`api/rankings?page=${p}&limit=${limit}`), {
         headers: getAuthHeaders(),
       })
 
@@ -26,17 +29,22 @@ export default function RankingPage() {
       }
 
       const data = await res.json()
-      // data esperado: [{ level, userId, firstName, lastName, score, commandsUsed, timeTaken }]
-      const mapped = (Array.isArray(data) ? data : []).map((r, idx) => ({
-        key: `${r.userId}-${r.level}-${idx}`,
-        userId: r.userId,
-        user: `${r.firstName} ${r.lastName}`.trim(),
-        level: r.level,
-        time: r.timeTaken,
-        commands: r.commandsUsed,
-        score: r.score,
-      }))
+      // data esperado: { items, meta }
+      const mapped = (Array.isArray(data?.items) ? data.items : []).map((r: any, idx: number) => {
+        const globalPosition = (page - 1) * limit + idx + 1
+        return {
+          key: `${r.userId}-${r.level}-${globalPosition}`,
+          userId: r.userId,
+          user: `${r.firstName} ${r.lastName}`.trim(),
+          level: r.level,
+          time: r.timeTaken,
+          commands: r.commandsUsed,
+          score: r.score,
+          position: globalPosition,
+        }
+      })
       setRankings(mapped)
+      setMeta(data?.meta ?? null)
     } catch (e: any) {
       setError(e?.message || 'Error cargando el ranking')
     } finally {
@@ -49,8 +57,9 @@ export default function RankingPage() {
     const token = authStorage.getAccessToken()
     if (!token) setShowLogin(true)
 
-    fetchRankings()
-  }, [])
+    fetchRankings(page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -80,7 +89,7 @@ export default function RankingPage() {
 
       setShowLogin(false)
       setLoading(true)
-      await fetchRankings()
+      await fetchRankings(page)
     } catch (err: any) {
       setLoginError(err?.message || 'Error al iniciar sesión')
     } finally {
@@ -161,14 +170,14 @@ export default function RankingPage() {
                 </tr>
               </thead>
               <tbody>
-                {rankings.map((rank, index) => (
-                  <tr key={rank.key ?? index} className="border-b border-gray-700 hover:bg-gray-800/50">
+                {rankings.map((rank) => (
+                  <tr key={rank.key ?? rank.position} className="border-b border-gray-700 hover:bg-gray-800/50">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        {index === 0 && <span className="text-yellow-400">🥇</span>}
-                        {index === 1 && <span className="text-gray-300">🥈</span>}
-                        {index === 2 && <span className="text-orange-400">🥉</span>}
-                        <span className="font-bold">#{index + 1}</span>
+                        {rank.position === 1 && <span className="text-yellow-400">🥇</span>}
+                        {rank.position === 2 && <span className="text-gray-300">🥈</span>}
+                        {rank.position === 3 && <span className="text-orange-400">🥉</span>}
+                        <span className="font-bold">#{rank.position}</span>
                       </div>
                     </td>
                     <td className="py-3 px-4 font-medium">{rank.user}</td>
@@ -203,6 +212,28 @@ export default function RankingPage() {
               No hay datos de ranking disponibles
             </div>
           )}
+        </div>
+
+        <div className="flex items-center justify-between mt-6">
+          <div className="text-sm text-gray-300">
+            Página {meta?.currentPage ?? page} de {meta?.totalPages ?? 1} • Total: {meta?.totalItems ?? 0}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-2 rounded border border-gray-600 hover:bg-gray-800 disabled:opacity-50"
+              disabled={loading || (meta ? page <= 1 : page <= 1)}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Anterior
+            </button>
+            <button
+              className="px-3 py-2 rounded border border-gray-600 hover:bg-gray-800 disabled:opacity-50"
+              disabled={loading || (meta ? page >= (meta.totalPages ?? 1) : false)}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
 
         <div className="mt-6 text-center">
