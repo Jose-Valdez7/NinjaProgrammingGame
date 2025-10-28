@@ -1,24 +1,47 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LogIn, Home } from 'lucide-react'
+import { apiUrl, authStorage } from '../config/env'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [cedula, setCedula] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
     
     try {
-      // TODO: Implement login API call
-      console.log('Login attempt:', { email, password })
+      const res = await fetch(apiUrl('api/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, cedula }),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || 'Credenciales inválidas')
+      }
+
+      const json = await res.json()
+      const data = json?.data || {}
+      const accessToken = data?.accessToken
+      const refreshToken = data?.refreshToken
+      if (!accessToken) throw new Error('Respuesta de login inválida')
+
+      authStorage.setAccessToken(accessToken)
+      if (refreshToken) authStorage.setRefreshToken(refreshToken)
+      if (data?.user) authStorage.setCurrentUser(data.user)
       
-      // Temporary redirect to game
+      // Redirigir al juego después del login exitoso
       window.location.href = '/game'
-    } catch (err) {
-      setError('Error al iniciar sesión')
+    } catch (err: any) {
+      setError(err?.message || 'Error al iniciar sesión')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -47,14 +70,14 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                Contraseña
+              <label htmlFor="cedula" className="block text-sm font-medium text-gray-300 mb-2">
+                Cédula
               </label>
               <input
-                type="password"
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                type="text"
+                id="cedula"
+                value={cedula}
+                onChange={(e) => setCedula(e.target.value)}
                 className="ninja-input w-full"
                 required
               />
@@ -66,10 +89,11 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="ninja-button w-full flex items-center justify-center gap-2"
+              className="ninja-button w-full flex items-center justify-center gap-2 disabled:opacity-60"
+              disabled={loading}
             >
               <LogIn size={20} />
-              Iniciar Sesión
+              {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </button>
           </form>
 

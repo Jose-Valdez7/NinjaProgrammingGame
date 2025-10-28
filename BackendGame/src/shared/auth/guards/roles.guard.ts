@@ -22,10 +22,16 @@ export class RolesGuard implements CanActivate {
       return false; // No hay usuario autenticado
     }
 
-    if (!user.role || !Array.isArray(user.role)) {
+    const userRoles: string[] = Array.isArray(user.role)
+      ? user.role
+      : user.role
+      ? [user.role]
+      : [];
+
+    if (userRoles.length === 0) {
       return false; // El usuario no tiene role
     }
 
-    return requiredRoles.some((role) => user.role.includes(role));
+    return requiredRoles.some((role) => userRoles.includes(role));
   }
 }
