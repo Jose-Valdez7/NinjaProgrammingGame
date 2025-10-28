@@ -13,14 +13,25 @@
     @apply border-border font-stick;
   }
   body {
-    @apply bg-ninja-dark text-white font-stick;
+    @apply text-white font-stick;
     margin: 0;
     padding: 0;
     overflow-x: hidden;
+    background-image: url('/src/assets/images/backgrounds/fondo.png') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-attachment: fixed !important;
+    background-color: #1a1a2e !important;
   }
   
   html {
     font-family: 'Stick', sans-serif;
+    background-image: url('/src/assets/images/backgrounds/fondo.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
   }
   
   /* Aplicar Stick a todos los elementos */
@@ -122,5 +133,36 @@
   
   .btn-secondary {
     @apply font-stick;
+  }
+  
+  /* Fondo personalizado */
+  .background-overlay {
+    background-image: url('/src/assets/images/backgrounds/fondo.png') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-attachment: fixed !important;
+    position: relative;
+    background-color: #1a1a2e !important;
+  }
+  
+  .background-overlay::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: -1;
+  }
+  
+  /* Asegurar que el fondo se mantenga */
+  .min-h-screen {
+    background-image: url('/src/assets/images/backgrounds/fondo.png') !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-attachment: fixed !important;
   }
 }

@@ -43,7 +43,7 @@ export default function HomePage() {
 
   if (isLoadingStory) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center background-overlay">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-400 mx-auto mb-4"></div>
           <h2 className="text-2xl font-bold text-white mb-2 font-stick">Cargando Historia...</h2>
@@ -54,7 +54,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-ninja-dark via-ninja-purple to-ninja-blue flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center background-overlay">
       <div className="max-w-4xl mx-auto px-6 text-center">
         {/* Logo and Title */}
         <div className="mb-12">
