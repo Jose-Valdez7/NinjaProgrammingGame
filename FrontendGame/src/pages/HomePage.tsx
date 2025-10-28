@@ -47,7 +47,7 @@ export default function HomePage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-400 mx-auto mb-4"></div>
           <h2 className="text-2xl font-bold text-white mb-2">Cargando Historia...</h2>
-          <p className="text-gray-300">Preparando la aventura de Martín</p>
+          <p className="text-gray-300">Preparando la aventura de Debian</p>
         </div>
       </div>
     );
@@ -62,8 +62,8 @@ export default function HomePage() {
             🥷 NINJA 404
           </h1>
           <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-            La historia de Martín y su aventura dentro del código. Programa tu camino hacia la victoria 
-            y ayuda a Martín a escapar del juego.
+            La historia de Debian y su aventura dentro del código. Programa tu camino hacia la victoria 
+            y ayuda a Debian a escapar del juego.
           </p>
         </div>
 
