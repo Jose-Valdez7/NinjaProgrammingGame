@@ -11,42 +11,41 @@ model RefreshToken {
   id        String   @id @default(uuid())
   token     String   @unique
   userId    String
-  user      User     @relation("UserRefreshToken", fields: [userId], references: [id], onDelete: Cascade)
   isRevoked Boolean  @default(false)
   expiresAt DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  user      User     @relation("UserRefreshToken", fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
 }
 
 model PasswordResetToken {
-  id        String             @id @default(uuid())
+  id        String   @id @default(uuid())
   token     String   @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_reset_tokens")
 }
 
-
 model User {
-  id                     String               @id @default(uuid())
-  firstName              String
-  lastName               String
-  email                  String               @unique
-  phone                  String?
-  cedula                 String               @unique
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
-  role                   UserRole             @default(USER)
-  levels                 LevelProgress[]      @relation("UserLevelProgress")
-  rankings               Ranking[]            @relation("UserRanking")
-  passwordResetTokens    PasswordResetToken[]
-  refreshTokens          RefreshToken[]       @relation("UserRefreshToken")
+  id                  String               @id @default(uuid())
+  firstName           String
+  lastName            String
+  email               String               @unique
+  phone               String?
+  cedula              String               @unique
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  role                UserRole             @default(USER)
+  levels              LevelProgress[]      @relation("UserLevelProgress")
+  passwordResetTokens PasswordResetToken[]
+  rankings            Ranking[]            @relation("UserRanking")
+  refreshTokens       RefreshToken[]       @relation("UserRefreshToken")
 
   @@map("users")
 }
