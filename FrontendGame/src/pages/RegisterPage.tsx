@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { UserPlus, Home } from 'lucide-react'
+import { apiUrl, authStorage } from '../config/env'
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -8,11 +9,10 @@ export default function RegisterPage() {
     lastName: '',
     email: '',
     phone: '',
-    dni: '',
-    password: '',
-    confirmPassword: ''
+    cedula: '',
   })
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleChange = (e: any) => {
     setFormData({
@@ -24,20 +24,36 @@ export default function RegisterPage() {
   const handleSubmit = async (e: any) => {
     e.preventDefault()
     setError('')
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Las contraseñas no coinciden')
-      return
-    }
+    setLoading(true)
 
     try {
-      // TODO: Implement registration API call
-      console.log('Registration attempt:', formData)
+      const res = await fetch(apiUrl('api/auth/register'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || 'Error al registrar usuario')
+      }
+
+      const json = await res.json()
+      const data = json?.data || {}
+      const accessToken = data?.accessToken
+      const refreshToken = data?.refreshToken
+      if (!accessToken) throw new Error('Respuesta de registro inválida')
+
+      authStorage.setAccessToken(accessToken)
+      if (refreshToken) authStorage.setRefreshToken(refreshToken)
+      if (data?.user) authStorage.setCurrentUser(data.user)
       
-      // Temporary redirect to login
-      window.location.href = '/login'
-    } catch (err) {
-      setError('Error al registrar usuario')
+      // Redirigir al juego después del registro exitoso
+      window.location.href = '/game'
+    } catch (err: any) {
+      setError(err?.message || 'Error al registrar usuario')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -113,35 +129,8 @@ export default function RegisterPage() {
               </label>
               <input
                 type="text"
-                name="dni"
-                value={formData.dni}
-                onChange={handleChange}
-                className="ninja-input w-full"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Contraseña
-              </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                className="ninja-input w-full"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Confirmar Contraseña
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
+                name="cedula"
+                value={formData.cedula}
                 onChange={handleChange}
                 className="ninja-input w-full"
                 required
@@ -154,10 +143,11 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              className="ninja-button w-full flex items-center justify-center gap-2"
+              className="ninja-button w-full flex items-center justify-center gap-2 disabled:opacity-60"
+              disabled={loading}
             >
               <UserPlus size={20} />
-              Registrarse
+              {loading ? 'Registrando...' : 'Registrarse'}
             </button>
           </form>
 

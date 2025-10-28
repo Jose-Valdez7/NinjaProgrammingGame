@@ -1,13 +1,113 @@
 import { Link } from 'react-router-dom'
-import { Home, Trophy, Clock, Code } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Home, Trophy, Clock, Code, LogOut } from 'lucide-react'
+import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
 
 export default function RankingPage() {
-  // Mock data - replace with API call
-  const rankings = [
-    { id: 1, user: 'Juan Pérez', level: 15, time: 45, commands: 23, score: 950 },
-    { id: 2, user: 'María García', level: 12, time: 38, commands: 19, score: 920 },
-    { id: 3, user: 'Carlos López', level: 10, time: 42, commands: 25, score: 880 },
-  ]
+  const [rankings, setRankings] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showLogin, setShowLogin] = useState(false)
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginCedula, setLoginCedula] = useState('')
+  const [loginError, setLoginError] = useState<string | null>(null)
+  const [loggingIn, setLoggingIn] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  const fetchRankings = async () => {
+    try {
+      const res = await fetch(apiUrl('api/rankings'), {
+        headers: getAuthHeaders(),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Error ${res.status}`)
+      }
+
+      const data = await res.json()
+      // data esperado: [{ level, userId, firstName, lastName, score, commandsUsed, timeTaken }]
+      const mapped = (Array.isArray(data) ? data : []).map((r, idx) => ({
+        key: `${r.userId}-${r.level}-${idx}`,
+        userId: r.userId,
+        user: `${r.firstName} ${r.lastName}`.trim(),
+        level: r.level,
+        time: r.timeTaken,
+        commands: r.commandsUsed,
+        score: r.score,
+      }))
+      setRankings(mapped)
+    } catch (e: any) {
+      setError(e?.message || 'Error cargando el ranking')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    // Mostrar modal si no hay token
+    const token = authStorage.getAccessToken()
+    if (!token) setShowLogin(true)
+
+    fetchRankings()
+  }, [])
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoginError(null)
+    setLoggingIn(true)
+    try {
+      const res = await fetch(apiUrl('api/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, cedula: loginCedula }),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || 'Credenciales inválidas')
+      }
+
+      const json = await res.json()
+      const data = json?.data || {}
+      const accessToken = data?.accessToken
+      const refreshToken = data?.refreshToken
+      if (!accessToken) throw new Error('Respuesta de login inválida')
+
+      authStorage.setAccessToken(accessToken)
+      if (refreshToken) authStorage.setRefreshToken(refreshToken)
+      if (data?.user) authStorage.setCurrentUser(data.user)
+
+      setShowLogin(false)
+      setLoading(true)
+      await fetchRankings()
+    } catch (err: any) {
+      setLoginError(err?.message || 'Error al iniciar sesión')
+    } finally {
+      setLoggingIn(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true)
+      const refreshToken = authStorage.getRefreshToken()
+      // Llamada al logout en backend (mejor esfuerzo)
+      if (refreshToken) {
+        await fetch(apiUrl('api/auth/logout'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        })
+      }
+    } catch (_) {
+      // Ignorar errores de logout
+    } finally {
+      authStorage.clearAll()
+      setShowLogin(true)
+      setLoggingOut(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-ninja-dark text-white">
@@ -20,6 +120,18 @@ export default function RankingPage() {
             </Link>
             <h1 className="text-xl font-bold">Ranking Global</h1>
           </div>
+          <div className="flex items-center gap-3">
+            {authStorage.getAccessToken() && (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-2 rounded border border-blue-500/40 hover:bg-blue-600/20 flex items-center gap-2 text-sm"
+                disabled={loggingOut}
+              >
+                <LogOut size={16} />
+                {loggingOut ? 'Cerrando...' : 'Cerrar sesión'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -31,6 +143,12 @@ export default function RankingPage() {
           </div>
 
           <div className="overflow-x-auto">
+            {loading && (
+              <div className="text-center py-8 text-gray-400">Cargando ranking...</div>
+            )}
+            {error && !loading && (
+              <div className="text-center py-8 text-red-400">{error}</div>
+            )}
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-600">
@@ -44,7 +162,7 @@ export default function RankingPage() {
               </thead>
               <tbody>
                 {rankings.map((rank, index) => (
-                  <tr key={rank.id} className="border-b border-gray-700 hover:bg-gray-800/50">
+                  <tr key={rank.key ?? index} className="border-b border-gray-700 hover:bg-gray-800/50">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         {index === 0 && <span className="text-yellow-400">🥇</span>}
@@ -94,6 +212,65 @@ export default function RankingPage() {
           </Link>
         </div>
       </div>
+
+      {showLogin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" />
+          <div className="relative bg-ninja-purple border border-blue-500/30 rounded-lg w-full max-w-md mx-4 p-6">
+            <div className="mb-4">
+              <h3 className="text-xl font-bold">Iniciar sesión</h3>
+              <p className="text-gray-300 text-sm">Accede para una mejor experiencia</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label htmlFor="login-email" className="block text-sm text-gray-300 mb-2">Email</label>
+                <input
+                  id="login-email"
+                  type="email"
+                  className="ninja-input w-full"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="login-cedula" className="block text-sm text-gray-300 mb-2">Cédula</label>
+                <input
+                  id="login-cedula"
+                  type="text"
+                  className="ninja-input w-full"
+                  value={loginCedula}
+                  onChange={(e) => setLoginCedula(e.target.value)}
+                  required
+                />
+              </div>
+
+              {loginError && (
+                <div className="text-red-400 text-sm text-center">{loginError}</div>
+              )}
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  className="ninja-button flex-1 disabled:opacity-60"
+                  disabled={loggingIn}
+                >
+                  {loggingIn ? 'Ingresando...' : 'Ingresar'}
+                </button>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded border border-gray-600 text-gray-200 hover:bg-gray-800"
+                  onClick={() => setShowLogin(false)}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
