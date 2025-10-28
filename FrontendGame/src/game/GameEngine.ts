@@ -1,8 +1,5 @@
-import * as PIXI from 'pixi.js'
-import '@pixi/canvas-renderer'
-import '@pixi/canvas-graphics'
-import '@pixi/canvas-sprite'
-import '@pixi/canvas-text'
+import { Application, Assets, Container, Graphics, Text } from 'pixi.js'
+import { Spine } from '@esotericsoftware/spine-pixi-v8'
 import { gsap } from 'gsap'
 import { GameLevel, CellType } from '../types/game'
 
@@ -45,16 +42,11 @@ class NativeCanvasRenderer {
     this.render()
   }
 
-  animateNinjaMovement(fromX: number, fromY: number, toX: number, toY: number): Promise<void> {
+  animateNinjaMovement(_fromX: number, _fromY: number, toX: number, toY: number): Promise<void> {
     return new Promise((resolve) => {
       this.ninjaState = 'walking'
       this.walkFrame = 0
       
-      const startX = fromX * this.cellSize + this.cellSize / 2
-      const startY = fromY * this.cellSize + this.cellSize / 2
-      const endX = toX * this.cellSize + this.cellSize / 2
-      const endY = toY * this.cellSize + this.cellSize / 2
-
       gsap.to(this, {
         duration: 0.3,
         ease: "power2.inOut",
@@ -439,7 +431,7 @@ class NativeCanvasRenderer {
     const ninjaPixelY = this.ninjaY * this.cellSize + this.cellSize / 2
     
     this.drawNinja(ninjaPixelX, ninjaPixelY)
-    
+
     // Actualizar animación
     this.animationTime++
     if (this.ninjaState === 'walking') {
@@ -448,36 +440,34 @@ class NativeCanvasRenderer {
   }
 
   destroy(): void {
-    // Limpiar canvas
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+    // No se requieren limpiezas específicas, pero se deja el método para simetría
   }
 }
 
+type GameEngineOptions = {
+  width?: number
+  height?: number
+}
+
 export class GameEngine {
-  private app: PIXI.Application | NativeCanvasRenderer | null = null
-  private container: HTMLElement
+  private app: Application | NativeCanvasRenderer | null = null
+  private readonly container: HTMLElement
   private canvasElement: HTMLCanvasElement
-  private gameContainer!: PIXI.Container
-  private gridContainer!: PIXI.Container
-  private ninjaSprite!: PIXI.Container
-  private cellSize: number = 32
-  private gridSize: number = 15
+  private gameContainer: Container | null = null
+  private gridContainer: Container | null = null
+  private ninjaSprite: Container | null = null
+  private ninjaSpine: Spine | null = null
+  private spineLoadPromise: Promise<void> | null = null
+  private readonly cellSize = 32
+  private readonly gridSize = 15
+  private currentNinjaX = 0
+  private currentNinjaY = 0
 
-  private get pixiApp(): PIXI.Application | null {
-    return this.app instanceof PIXI.Application ? this.app : null
-  }
-
-  private get nativeRenderer(): NativeCanvasRenderer | null {
-    return this.app instanceof NativeCanvasRenderer ? this.app : null
-  }
-
-  constructor(container: HTMLElement, options?: { width?: number; height?: number }) {
-    if (!container) throw new Error('Contenedor no encontrado al inicializar el juego')
-
+  constructor(container: HTMLElement, options?: GameEngineOptions) {
     this.container = container
 
-    const gameWidth = options?.width || 480
-    const gameHeight = options?.height || 480
+    const gameWidth = options?.width ?? 480
+    const gameHeight = options?.height ?? 480
 
     this.canvasElement = document.createElement('canvas')
     this.canvasElement.width = gameWidth
@@ -490,40 +480,55 @@ export class GameEngine {
     this.container.innerHTML = ''
     this.container.appendChild(this.canvasElement)
 
-    // Configuración robusta para PixiJS
-    PIXI.settings.FAIL_IF_MAJOR_PERFORMANCE_CAVEAT = false
+    void this.initializeRenderer(gameWidth, gameHeight)
+  }
 
+  private async initializeRenderer(width: number, height: number): Promise<void> {
     try {
-      this.app = new PIXI.Application({
+      const app = new Application()
+      await app.init({
         view: this.canvasElement,
-        width: gameWidth,
-        height: gameHeight,
-        backgroundColor: 0x1a1a2e,
+        width,
+        height,
+        background: 0x1a1a2e,
         antialias: true,
-        autoDensity: false,
         resolution: 1,
         powerPreference: 'high-performance',
-        sharedTicker: false,
       })
 
+      this.app = app
       this.initializePixiScene()
-    } catch (pixiErr) {
-      this.switchToNativeRenderer(gameWidth, gameHeight)
+    } catch (error) {
+      console.warn('No fue posible inicializar PixiJS, usando renderer nativo.', error)
+      this.switchToNativeRenderer(width, height)
     }
+  }
+
+  private get pixiApp(): Application | null {
+    return this.app instanceof Application ? this.app : null
+  }
+
+  private get nativeRenderer(): NativeCanvasRenderer | null {
+    return this.app instanceof NativeCanvasRenderer ? this.app : null
   }
 
   private initializePixiScene(): void {
     const app = this.pixiApp
     if (!app) return
 
-    this.gameContainer = new PIXI.Container()
-    this.gridContainer = new PIXI.Container()
+    const gameContainer = new Container()
+    const gridContainer = new Container()
+    const ninjaSprite = this.createAdvancedNinjaSprite()
 
-    app.stage.addChild(this.gameContainer)
-    this.gameContainer.addChild(this.gridContainer)
+    app.stage.addChild(gameContainer)
+    gameContainer.addChild(gridContainer)
+    gameContainer.addChild(ninjaSprite)
 
-    this.ninjaSprite = this.createAdvancedNinjaSprite()
-    this.gameContainer.addChild(this.ninjaSprite)
+    this.gameContainer = gameContainer
+    this.gridContainer = gridContainer
+    this.ninjaSprite = ninjaSprite
+
+    void this.ensureSpineNinja()
   }
 
   private switchToNativeRenderer(width: number, height: number): void {
@@ -541,134 +546,112 @@ export class GameEngine {
     this.app = new NativeCanvasRenderer(this.canvasElement)
   }
 
-  private createAdvancedNinjaSprite(): PIXI.Container {
-    const ninjaContainer = new PIXI.Container()
-    
-    // Crear ninja usando solo rectángulos para máxima compatibilidad
-    const ninjaBody = new PIXI.Graphics()
-    
-    // Cuerpo principal (azul oscuro)
-    ninjaBody.beginFill(0x1e3a8a)
-    ninjaBody.drawRect(-8, -15, 16, 25)
-    ninjaBody.endFill()
-    
-    // Capucha
-    ninjaBody.beginFill(0x1e3a8a)
-    ninjaBody.drawRect(-12, -20, 24, 12)
-    ninjaBody.endFill()
-    
-    // Cinta roja
-    ninjaBody.beginFill(0xdc2626)
-    ninjaBody.drawRect(-10, -12, 20, 3)
-    ninjaBody.endFill()
-    
-    // Máscara amarilla
-    ninjaBody.beginFill(0xfbbf24)
-    ninjaBody.drawRect(-6, -6, 12, 8)
-    ninjaBody.endFill()
-    
-    // Ojos blancos
-    ninjaBody.beginFill(0xffffff)
-    ninjaBody.drawRect(-4, -4, 3, 3)
-    ninjaBody.drawRect(1, -4, 3, 3)
-    ninjaBody.endFill()
-    
-    // Pupilas negras
-    ninjaBody.beginFill(0x000000)
-    ninjaBody.drawRect(-3, -3, 2, 2)
-    ninjaBody.drawRect(2, -3, 2, 2)
-    ninjaBody.endFill()
-    
-    // Brillo en ojos
-    ninjaBody.beginFill(0xffffff)
-    ninjaBody.drawRect(-2, -2, 1, 1)
-    ninjaBody.drawRect(3, -2, 1, 1)
-    ninjaBody.endFill()
-    
-    // Brazos
-    ninjaBody.beginFill(0x1e3a8a)
-    ninjaBody.drawRect(-12, -5, 4, 12)
-    ninjaBody.drawRect(8, -5, 4, 12)
-    ninjaBody.endFill()
-    
-    // Piernas
-    ninjaBody.beginFill(0x1e3a8a)
-    ninjaBody.drawRect(-6, 8, 3, 8)
-    ninjaBody.drawRect(3, 8, 3, 8)
-    ninjaBody.endFill()
-    
-    // Cinturón rojo
-    ninjaBody.beginFill(0xdc2626)
-    ninjaBody.drawRect(-8, 5, 16, 3)
-    ninjaBody.endFill()
-    
-    // Dispositivos USB
-    ninjaBody.beginFill(0x22c55e)
-    ninjaBody.drawRect(-6, 6, 2, 2)
-    ninjaBody.endFill()
-    
-    ninjaBody.beginFill(0x3b82f6)
-    ninjaBody.drawRect(-3, 6, 2, 2)
-    ninjaBody.endFill()
-    
-    ninjaBody.beginFill(0x8b5cf6)
-    ninjaBody.drawRect(0, 6, 2, 2)
-    ninjaBody.endFill()
-    
-    ninjaBody.beginFill(0x6b7280)
-    ninjaBody.drawRect(3, 6, 2, 2)
-    ninjaBody.endFill()
-    
-    // Ratones
-    ninjaBody.beginFill(0x6b7280)
-    ninjaBody.drawRect(-15, 15, 4, 2)
-    ninjaBody.drawRect(-8, 18, 4, 2)
-    ninjaBody.drawRect(5, 16, 4, 2)
-    ninjaBody.endFill()
-    
-    ninjaContainer.addChild(ninjaBody)
-    
-    // Agregar texto "N" por separado
-    const nText = new PIXI.Text('N', {
-      fontFamily: 'Arial',
-      fontSize: 8,
-      fontWeight: 'bold',
-      fill: 0xffffff,
-      align: 'center'
-    })
-    nText.anchor.set(0.5)
-    nText.x = 0
-    nText.y = -8
-    ninjaContainer.addChild(nText)
-    
-    // Guardar referencias para animaciones (usando el mismo objeto)
-    ;(ninjaContainer as any).leftArm = ninjaBody
-    ;(ninjaContainer as any).rightArm = ninjaBody
-    ;(ninjaContainer as any).leftLeg = ninjaBody
-    ;(ninjaContainer as any).rightLeg = ninjaBody
-    
-    return ninjaContainer
-  }
+  private async ensureSpineNinja(): Promise<void> {
+    const app = this.pixiApp
+    const ninjaSprite = this.ninjaSprite
 
-  private createCellSprite(cellType: CellType): PIXI.Graphics {
-    const graphics = new PIXI.Graphics()
-    
-    const colors: Record<CellType, number> = {
-      [CellType.SAFE]: 0x22c55e,    // Verde
-      [CellType.ENERGY]: 0xfbbf24,  // Amarillo
-      [CellType.VOID]: 0x000000,    // Negro
-      [CellType.SNAKE]: 0xdc2626,   // Rojo
-      [CellType.DOOR]: 0x2563eb,    // Azul
+    if (!app || !ninjaSprite || this.ninjaSpine) {
+      return
     }
 
-    // Fondo de la celda
-    graphics.beginFill(colors[cellType] ?? 0x374151)
-    graphics.drawRect(0, 0, this.cellSize, this.cellSize)
-    graphics.endFill()
-    
-    // Borde
-    graphics.lineStyle(1, 0x6b7280, 1)
-    graphics.drawRect(0, 0, this.cellSize, this.cellSize)
+    if (!this.spineLoadPromise) {
+      this.spineLoadPromise = (async () => {
+        try {
+          await Assets.load([
+            { alias: 'spineSkeleton', src: 'https://pixijs.com/assets/tutorials/spineboy-adventure/spineboy-pro.json' },
+            { alias: 'spineAtlas', src: 'https://pixijs.com/assets/tutorials/spineboy-adventure/spineboy-pma.atlas' },
+            { alias: 'spineTexture', src: 'https://pixijs.com/assets/tutorials/spineboy-adventure/spineboy-pma.png' },
+          ])
+
+          const spine = Spine.from({ skeleton: 'spineSkeleton', atlas: 'spineAtlas', texture: 'spineTexture' })
+          const scale = this.cellSize / 120
+          spine.scale.set(scale)
+          spine.x = 0
+          spine.y = this.cellSize / 2
+          spine.state.setAnimation(0, 'idle', true)
+
+          this.ninjaSpine = spine
+          ninjaSprite.removeChildren()
+          ninjaSprite.addChild(spine)
+          this.setNinjaPosition(this.currentNinjaX, this.currentNinjaY)
+        } catch (error) {
+          console.warn('No se pudo cargar Spine, usando sprite manual:', error)
+          // Ya tenemos el sprite manual creado, no hacer nada más
+          this.spineLoadPromise = Promise.resolve()
+        }
+      })()
+    }
+
+    await this.spineLoadPromise
+  }
+
+  private playNinjaAnimation(name: string, loop = true, force = false): void {
+    const spine = this.ninjaSpine
+    if (!spine) return
+
+    const current = spine.state.getCurrent(0)
+    if (!force && current?.animation?.name === name) return
+
+    spine.state.setAnimation(0, name, loop)
+  }
+
+  private createAdvancedNinjaSprite(): Container {
+    const container = new Container()
+
+    const shadow = new Graphics()
+    shadow.fill({ color: 0x000000, alpha: 0.3 }).ellipse(0, this.cellSize / 2 - 4, this.cellSize * 0.3, this.cellSize * 0.12).fill()
+    container.addChild(shadow)
+
+    const body = new Graphics()
+    body.fill({ color: 0x1e3a8a }).rect(-8, -15, 16, 25).fill()
+    body.fill({ color: 0x1e3a8a }).rect(-12, -22, 24, 12).fill()
+    body.fill({ color: 0xdc2626 }).rect(-10, -14, 20, 3).fill()
+    body.fill({ color: 0xfbbf24 }).rect(-6, -6, 12, 8).fill()
+    body.fill({ color: 0xffffff }).circle(-3, -2, 3).fill()
+    body.fill({ color: 0xffffff }).circle(3, -2, 3).fill()
+    body.fill({ color: 0x000000 }).circle(-3, -2, 1.5).fill()
+    body.fill({ color: 0x000000 }).circle(3, -2, 1.5).fill()
+    body.fill({ color: 0xffffff }).circle(-2.2, -3, 0.6).fill()
+    body.fill({ color: 0xffffff }).circle(3.2, -3, 0.6).fill()
+    body.fill({ color: 0x1e3a8a }).rect(-12, -4, 4, 12).fill()
+    body.fill({ color: 0x1e3a8a }).rect(8, -4, 4, 12).fill()
+    body.fill({ color: 0x1e3a8a }).rect(-6, 8, 3, 8).fill()
+    body.fill({ color: 0x1e3a8a }).rect(3, 8, 3, 8).fill()
+    body.fill({ color: 0xdc2626 }).rect(-8, 5, 16, 3).fill()
+    body.fill({ color: 0x22c55e }).rect(-6, 7, 2, 2).fill()
+    body.fill({ color: 0x3b82f6 }).rect(-3, 7, 2, 2).fill()
+    body.fill({ color: 0x8b5cf6 }).rect(0, 7, 2, 2).fill()
+    body.fill({ color: 0x6b7280 }).rect(3, 7, 2, 2).fill()
+    body.fill({ color: 0x6b7280 }).rect(-15, 16, 4, 2).fill()
+    body.fill({ color: 0x6b7280 }).rect(-8, 19, 4, 2).fill()
+    body.fill({ color: 0x6b7280 }).rect(5, 17, 4, 2).fill()
+
+    container.addChild(body)
+
+    const emblem = new Text({
+      text: 'N',
+      style: { fontFamily: 'Arial', fontSize: 8, fontWeight: 'bold', fill: 0xffffff },
+    })
+    emblem.anchor.set(0.5)
+    emblem.position.set(0, -8)
+    container.addChild(emblem)
+
+    return container
+  }
+
+  private createCellSprite(cellType: CellType): Graphics {
+    const graphics = new Graphics()
+
+    const colors: Record<CellType, number> = {
+      [CellType.SAFE]: 0x22c55e,
+      [CellType.ENERGY]: 0xfbbf24,
+      [CellType.VOID]: 0x000000,
+      [CellType.SNAKE]: 0xdc2626,
+      [CellType.DOOR]: 0x2563eb,
+    }
+
+    graphics.fill({ color: colors[cellType] ?? 0x374151 }).rect(0, 0, this.cellSize, this.cellSize).fill()
+    graphics.stroke({ color: 0x6b7280, width: 1 }).rect(0, 0, this.cellSize, this.cellSize).stroke()
 
     return graphics
   }
@@ -680,130 +663,96 @@ export class GameEngine {
       return
     }
 
-    const pixi = this.pixiApp
-    if (!pixi) {
+    void this.ensureSpineNinja()
+
+    if (!this.pixiApp) {
       console.error('Renderer no disponible al cargar nivel')
       return
     }
 
-    // Limpiar grid anterior
-    this.gridContainer.removeChildren()
-    
-    // Crear nuevo grid
+    const gridContainer = this.gridContainer
+    if (!gridContainer) {
+      console.error('Renderer no disponible al cargar nivel')
+      return
+    }
+
+    gridContainer.removeChildren()
+
     for (let y = 0; y < this.gridSize; y++) {
       for (let x = 0; x < this.gridSize; x++) {
         const cell = level.grid[y][x]
         const cellSprite = this.createCellSprite(cell.type)
-        
+
         cellSprite.x = x * this.cellSize
         cellSprite.y = y * this.cellSize
-        
-        // Efectos especiales
+
         if (cell.type === CellType.ENERGY) {
           this.addEnergyGlow(cellSprite)
         }
-        
+
         if (level.hasGuideLines && cell.isPath) {
           this.addGuideLine(cellSprite)
         }
-        
-        this.gridContainer.addChild(cellSprite)
+
+        gridContainer.addChild(cellSprite)
       }
     }
-    
+
     this.setNinjaPosition(level.startPosition.x, level.startPosition.y)
   }
 
-  private addEnergyGlow(graphics: PIXI.Graphics): void {
-    // Simplificar el efecto de brillo para Canvas renderer
-    graphics.lineStyle(2, 0xfbbf24, 0.8)
-    graphics.drawCircle(this.cellSize / 2, this.cellSize / 2, this.cellSize / 2 - 2)
+  private addEnergyGlow(graphics: Graphics): void {
+    graphics.stroke({ color: 0xfbbf24, width: 2, alpha: 0.8 }).circle(this.cellSize / 2, this.cellSize / 2, this.cellSize / 2 - 2).stroke()
   }
 
-  private addGuideLine(graphics: PIXI.Graphics): void {
-    // Simplificar las líneas guía
-    graphics.lineStyle(2, 0xfbbf24, 0.7)
-    graphics.moveTo(this.cellSize / 4, this.cellSize / 2)
-    graphics.lineTo(3 * this.cellSize / 4, this.cellSize / 2)
-    graphics.moveTo(this.cellSize / 2, this.cellSize / 4)
-    graphics.lineTo(this.cellSize / 2, 3 * this.cellSize / 4)
+  private addGuideLine(graphics: Graphics): void {
+    graphics.stroke({ color: 0xfbbf24, width: 2, alpha: 0.7 }).moveTo(this.cellSize / 4, this.cellSize / 2).lineTo((3 * this.cellSize) / 4, this.cellSize / 2).moveTo(this.cellSize / 2, this.cellSize / 4).lineTo(this.cellSize / 2, (3 * this.cellSize) / 4).stroke()
   }
 
   public setNinjaPosition(x: number, y: number): void {
+    this.currentNinjaX = x
+    this.currentNinjaY = y
+
     const native = this.nativeRenderer
     if (native) {
       native.setNinjaPosition(x, y)
       return
     }
 
-    this.ninjaSprite.x = x * this.cellSize + this.cellSize / 2
-    this.ninjaSprite.y = y * this.cellSize + this.cellSize / 2
+    const ninjaSprite = this.ninjaSprite
+    if (ninjaSprite) {
+      ninjaSprite.x = x * this.cellSize + this.cellSize / 2
+      ninjaSprite.y = y * this.cellSize + this.cellSize / 2
+    }
   }
 
-  public animateNinjaMovement(fromX: number, fromY: number, toX: number, toY: number): Promise<void> {
+  public animateNinjaMovement(_fromX: number, _fromY: number, toX: number, toY: number): Promise<void> {
     const native = this.nativeRenderer
     if (native) {
-      return native.animateNinjaMovement(fromX, fromY, toX, toY)
+      return native.animateNinjaMovement(_fromX, _fromY, toX, toY)
+    }
+
+    void this.ensureSpineNinja()
+    this.playNinjaAnimation('walk', true, true)
+
+    const ninjaSprite = this.ninjaSprite
+    if (!ninjaSprite) {
+      return Promise.resolve()
     }
 
     return new Promise((resolve) => {
       const toPixelX = toX * this.cellSize + this.cellSize / 2
       const toPixelY = toY * this.cellSize + this.cellSize / 2
 
-      // Animación de caminar con movimiento de brazos y piernas
-      const leftArm = (this.ninjaSprite as any).leftArm
-      const rightArm = (this.ninjaSprite as any).rightArm
-      const leftLeg = (this.ninjaSprite as any).leftLeg
-      const rightLeg = (this.ninjaSprite as any).rightLeg
-      
-      // Animación de brazos oscilantes
-      gsap.to(leftArm, {
-        rotation: 0.3,
-        duration: 0.15,
-        ease: "power2.inOut",
-        yoyo: true,
-        repeat: 1
-      })
-      
-      gsap.to(rightArm, {
-        rotation: -0.3,
-        duration: 0.15,
-        ease: "power2.inOut",
-        yoyo: true,
-        repeat: 1
-      })
-      
-      // Animación de piernas alternadas
-      gsap.to(leftLeg, {
-        rotation: 0.2,
-        duration: 0.15,
-        ease: "power2.inOut",
-        yoyo: true,
-        repeat: 1
-      })
-      
-      gsap.to(rightLeg, {
-        rotation: -0.2,
-        duration: 0.15,
-        ease: "power2.inOut",
-        yoyo: true,
-        repeat: 1
-      })
-      
-      // Movimiento principal
-      gsap.to(this.ninjaSprite, {
+      gsap.to(ninjaSprite, {
         x: toPixelX,
         y: toPixelY,
         duration: 0.3,
-        ease: "power2.inOut",
+        ease: 'power2.inOut',
         onComplete: () => {
-          // Resetear rotaciones
-          leftArm.rotation = 0
-          rightArm.rotation = 0
-          leftLeg.rotation = 0
-          rightLeg.rotation = 0
+          this.playNinjaAnimation('idle', true)
           resolve()
-        }
+        },
       })
     })
   }
@@ -815,85 +764,81 @@ export class GameEngine {
       return
     }
 
-    // Crear efectos de energía simples
+    void this.ensureSpineNinja()
+    this.playNinjaAnimation('hoverboard', true, true)
+
     this.createEnergyEffects()
-    
-    // Efecto de brillo en el ninja
-    gsap.to(this.ninjaSprite, {
+
+    const ninjaSprite = this.ninjaSprite
+    if (!ninjaSprite) return
+
+    gsap.to(ninjaSprite, {
       alpha: 0.7,
       duration: 0.1,
       yoyo: true,
       repeat: 5,
-      ease: "power2.inOut",
+      ease: 'power2.inOut',
       onComplete: () => {
-        this.ninjaSprite.alpha = 1
-      }
+        ninjaSprite.alpha = 1
+      },
     })
+
+    gsap.delayedCall(1, () => this.playNinjaAnimation('idle', true))
   }
 
   private createEnergyEffects(): void {
-    // Crear partículas de energía usando rectángulos simples
+    const gameContainer = this.gameContainer
+    const ninjaSprite = this.ninjaSprite
+    if (!gameContainer || !ninjaSprite) return
+
     for (let i = 0; i < 8; i++) {
-      const particle = new PIXI.Graphics()
-      particle.beginFill(0xfbbf24)
-      particle.drawRect(-2, -2, 4, 4)
-      particle.endFill()
-      
-      particle.x = this.ninjaSprite.x
-      particle.y = this.ninjaSprite.y
-      
-      this.gameContainer.addChild(particle)
-      
+      const particle = new Graphics()
+      particle.fill({ color: 0xfbbf24 }).rect(-2, -2, 4, 4).fill()
+
+      particle.x = ninjaSprite.x
+      particle.y = ninjaSprite.y
+
+      gameContainer.addChild(particle)
+
       const angle = (i / 8) * Math.PI * 2
       const distance = 50
-      
+
       gsap.to(particle, {
         x: particle.x + Math.cos(angle) * distance,
         y: particle.y + Math.sin(angle) * distance,
         alpha: 0,
         scale: 0,
         duration: 0.8,
-        ease: "power2.out",
+        ease: 'power2.out',
         onComplete: () => {
-          this.gameContainer.removeChild(particle)
-        }
+          gameContainer.removeChild(particle)
+        },
       })
     }
   }
 
   private createEnergyRays(): void {
-    // Crear rayos individuales para evitar problemas con Canvas renderer
+    const gameContainer = this.gameContainer
+    const ninjaSprite = this.ninjaSprite
+    if (!gameContainer || !ninjaSprite) return
+
     for (let i = 0; i < 8; i++) {
-      const ray = new PIXI.Graphics()
-      ray.lineStyle(3, 0xfbbf24, 0.8)
-      
-      const angle = (i / 8) * Math.PI * 2
-      const startRadius = 20
-      const endRadius = 35
-      
-      ray.moveTo(
-        Math.cos(angle) * startRadius,
-        Math.sin(angle) * startRadius
-      )
-      ray.lineTo(
-        Math.cos(angle) * endRadius,
-        Math.sin(angle) * endRadius
-      )
-      
-      ray.x = this.ninjaSprite.x
-      ray.y = this.ninjaSprite.y
-      
-      this.gameContainer.addChild(ray)
-      
-      // Animación individual de cada rayo
+      const ray = new Graphics()
+      ray.stroke({ color: 0xfbbf24, width: 3, alpha: 0.8 }).moveTo(Math.cos((i / 8) * Math.PI * 2) * 20, Math.sin((i / 8) * Math.PI * 2) * 20).lineTo(Math.cos((i / 8) * Math.PI * 2) * 35, Math.sin((i / 8) * Math.PI * 2) * 35).stroke()
+
+      ray.x = ninjaSprite.x
+      ray.y = ninjaSprite.y
+
+      gameContainer.addChild(ray)
+
       gsap.to(ray, {
         rotation: Math.PI * 2,
         alpha: 0,
-      duration: 1,
-        ease: "power2.out",
+        duration: 1,
+        ease: 'power2.out',
         onComplete: () => {
-          this.gameContainer.removeChild(ray)
-        }
+          gameContainer.removeChild(ray)
+        },
       })
     }
   }
@@ -904,88 +849,99 @@ export class GameEngine {
       return native.animateFailure(type)
     }
 
+    void this.ensureSpineNinja()
+
+    const ninjaSprite = this.ninjaSprite
+    if (!ninjaSprite) {
+      return Promise.resolve()
+    }
+
     return new Promise((resolve) => {
       if (type === 'void') {
-        // Animación de caída al vacío con efectos dramáticos
-        gsap.to(this.ninjaSprite, {
+        gsap.to(ninjaSprite, {
           rotation: Math.PI * 4,
           scale: 0,
           alpha: 0,
           duration: 1.2,
-          ease: "power2.in",
+          ease: 'power2.in',
           onComplete: () => {
             this.resetNinjaAppearance()
+            this.playNinjaAnimation('idle', true, true)
             resolve()
-          }
+          },
         })
-        
-        // Crear efecto de vórtice
+
         this.createVortexEffect()
       } else {
-        // Animación de mordida de serpiente con temblor intenso
-        const shakeSequence = gsap.timeline()
-        shakeSequence.to(this.ninjaSprite, {
-          x: this.ninjaSprite.x + 8,
-          duration: 0.05,
-          ease: "power2.inOut"
-        })
-        .to(this.ninjaSprite, {
-          x: this.ninjaSprite.x - 8,
-          duration: 0.05,
-          ease: "power2.inOut"
-        })
-        .to(this.ninjaSprite, {
-          x: this.ninjaSprite.x + 6,
-          duration: 0.05,
-          ease: "power2.inOut"
-        })
-        .to(this.ninjaSprite, {
-          x: this.ninjaSprite.x - 6,
-          duration: 0.05,
-          ease: "power2.inOut"
-        })
-        .to(this.ninjaSprite, {
-          x: this.ninjaSprite.x,
-          duration: 0.1,
-          ease: "power2.out",
-          onComplete: () => {
-            this.resetNinjaAppearance()
-            resolve()
-          }
-        })
+        const shakeTimeline = gsap.timeline()
+
+        shakeTimeline
+          .to(ninjaSprite, {
+            x: ninjaSprite.x + 8,
+            duration: 0.05,
+            ease: 'power2.inOut',
+          })
+          .to(ninjaSprite, {
+            x: ninjaSprite.x - 8,
+            duration: 0.05,
+            ease: 'power2.inOut',
+          })
+          .to(ninjaSprite, {
+            x: ninjaSprite.x + 6,
+            duration: 0.05,
+            ease: 'power2.inOut',
+          })
+          .to(ninjaSprite, {
+            x: ninjaSprite.x - 6,
+            duration: 0.05,
+            ease: 'power2.inOut',
+          })
+          .to(ninjaSprite, {
+            x: ninjaSprite.x,
+            duration: 0.1,
+            ease: 'power2.out',
+            onComplete: () => {
+              this.resetNinjaAppearance()
+              this.playNinjaAnimation('idle', true, true)
+              resolve()
+            },
+          })
       }
     })
   }
 
   private resetNinjaAppearance(): void {
-    this.ninjaSprite.alpha = 1
-    this.ninjaSprite.rotation = 0
-    this.ninjaSprite.scale.set(1)
-    // No remover children para evitar problemas con Canvas renderer
+    const ninjaSprite = this.ninjaSprite
+    if (!ninjaSprite) return
+
+    ninjaSprite.alpha = 1
+    ninjaSprite.rotation = 0
+    ninjaSprite.scale.set(1)
   }
 
   private createVortexEffect(): void {
-    // Crear círculos concéntricos simples para evitar problemas con Canvas renderer
+    const gameContainer = this.gameContainer
+    const ninjaSprite = this.ninjaSprite
+    if (!gameContainer || !ninjaSprite) return
+
     for (let i = 0; i < 5; i++) {
-      const circle = new PIXI.Graphics()
-      circle.lineStyle(2, 0x000000, 0.8 - i * 0.15)
-      circle.drawCircle(0, 0, 10 + i * 5)
-      
-      circle.x = this.ninjaSprite.x
-      circle.y = this.ninjaSprite.y
-      
-      this.gameContainer.addChild(circle)
-      
-      // Animación individual de cada círculo
+      const circle = new Graphics()
+      circle.stroke({ color: 0x000000, width: 2, alpha: 0.8 - i * 0.15 }).circle(0, 0, 10 + i * 5).stroke()
+
+      circle.x = ninjaSprite.x
+      circle.y = ninjaSprite.y
+
+      gameContainer.addChild(circle)
+
       gsap.to(circle, {
         rotation: Math.PI * 2,
         scale: 2,
         alpha: 0,
         duration: 1.2,
-        ease: "power2.in",
+        ease: 'power2.in',
         onComplete: () => {
-          this.gameContainer.removeChild(circle)
-        }
+          gameContainer.removeChild(circle)
+        },
       })
     }
   }
@@ -996,56 +952,59 @@ export class GameEngine {
       return native.animateVictory()
     }
 
+    void this.ensureSpineNinja()
+    this.playNinjaAnimation('jump', false, true)
+
+    const gameContainer = this.gameContainer
+    const ninjaSprite = this.ninjaSprite
+    if (!gameContainer || !ninjaSprite) {
+      return Promise.resolve()
+    }
+
     return new Promise((resolve) => {
-      // Crear efecto de luz expansiva
-      const light = new PIXI.Graphics()
-      light.beginFill(0xffffff, 0.8)
-      light.drawCircle(0, 0, 10)
-      light.endFill()
-      
-      light.x = this.ninjaSprite.x
-      light.y = this.ninjaSprite.y
-      
-      this.gameContainer.addChild(light)
-      
-      // Crear partículas de victoria
+      const light = new Graphics()
+      light.fill({ color: 0xffffff, alpha: 0.8 }).circle(0, 0, 10).fill()
+
+      light.x = ninjaSprite.x
+      light.y = ninjaSprite.y
+
+      gameContainer.addChild(light)
+
       for (let i = 0; i < 20; i++) {
-        const particle = new PIXI.Graphics()
-        particle.beginFill(0xffffff)
-        particle.drawCircle(0, 0, 2)
-        particle.endFill()
-        
-        particle.x = this.ninjaSprite.x
-        particle.y = this.ninjaSprite.y
-        
-        this.gameContainer.addChild(particle)
-        
+        const particle = new Graphics()
+        particle.fill({ color: 0xffffff }).circle(0, 0, 2).fill()
+
+        particle.x = ninjaSprite.x
+        particle.y = ninjaSprite.y
+
+        gameContainer.addChild(particle)
+
         const angle = (i / 20) * Math.PI * 2
         const distance = 80
-        
+
         gsap.to(particle, {
           x: particle.x + Math.cos(angle) * distance,
           y: particle.y + Math.sin(angle) * distance,
           alpha: 0,
           scale: 0,
           duration: 1.5,
-          ease: "power2.out",
+          ease: 'power2.out',
           onComplete: () => {
-            this.gameContainer.removeChild(particle)
-          }
+            gameContainer.removeChild(particle)
+          },
         })
       }
-      
-      // Animación de la luz
+
       gsap.to(light, {
         scale: 8,
-            alpha: 0,
+        alpha: 0,
         duration: 1.5,
-        ease: "power2.out",
-            onComplete: () => {
-              this.gameContainer.removeChild(light)
-              resolve()
-            }
+        ease: 'power2.out',
+        onComplete: () => {
+          gameContainer.removeChild(light)
+          this.playNinjaAnimation('idle', true)
+          resolve()
+        },
       })
     })
   }
@@ -1062,14 +1021,21 @@ export class GameEngine {
     }
 
     const app = this.pixiApp
-    if (!app) return null
+    if (!app) {
+      return null
+    }
+
+    const rendererType = (app.renderer as any)?.type ?? 'unknown'
 
     return {
-      rendererType: app.renderer.type === PIXI.RENDERER_TYPE.WEBGL ? 'WebGL' : 'Canvas',
+      rendererType,
       isNativeRenderer: false,
-      stageChildren: this.gameContainer ? this.gameContainer.children.length : 0,
-      gridChildren: this.gridContainer ? this.gridContainer.children.length : 0,
-      ninjaPosition: { x: this.ninjaSprite?.x ?? 0, y: this.ninjaSprite?.y ?? 0 }
+      stageChildren: this.gameContainer?.children.length ?? 0,
+      gridChildren: this.gridContainer?.children.length ?? 0,
+      ninjaPosition: {
+        x: this.ninjaSprite?.x ?? 0,
+        y: this.ninjaSprite?.y ?? 0,
+      },
     }
   }
 
@@ -1077,8 +1043,19 @@ export class GameEngine {
     const native = this.nativeRenderer
     if (native) {
       native.destroy()
-    } else {
-      this.pixiApp?.destroy(true)
+      return
     }
+
+    const app = this.pixiApp
+    if (app) {
+      void app.destroy()
+    }
+
+    this.app = null
+    this.gameContainer = null
+    this.gridContainer = null
+    this.ninjaSprite = null
+    this.ninjaSpine = null
+    this.spineLoadPromise = null
   }
 }

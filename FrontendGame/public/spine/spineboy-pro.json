@@ -1,0 +1,56 @@
+{
+  "skeleton": {
+    "hash": "spineboy-pro",
+    "spine": "4.2.95",
+    "x": 0,
+    "y": 0,
+    "width": 120,
+    "height": 120,
+    "images": "",
+    "audio": ""
+  },
+  "bones": [
+    {
+      "name": "root",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "slots": [
+    {
+      "name": "body",
+      "bone": "root",
+      "attachment": "body"
+    }
+  ],
+  "skins": {
+    "default": {
+      "body": {
+        "body": {
+          "x": 0,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        }
+      }
+    }
+  },
+  "animations": {
+    "idle": {
+      "bones": {},
+      "slots": {}
+    },
+    "walk": {
+      "bones": {},
+      "slots": {}
+    },
+    "hoverboard": {
+      "bones": {},
+      "slots": {}
+    },
+    "jump": {
+      "bones": {},
+      "slots": {}
+    }
+  }
+}
