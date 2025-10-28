@@ -68,7 +68,7 @@ export default function AdminPage() {
               <BarChart3 className="text-purple-400" size={32} />
               <h3 className="text-xl font-semibold">Partidas</h3>
             </div>
-            <div className="text-3xl font-bold text-green-400 mb-2">5,678</div>
+            <div className="text-3xl font-bold text-green-400 mb-2">5,678 </div>
             <p className="text-gray-400 text-sm">Partidas completadas</p>
           </div>
 
