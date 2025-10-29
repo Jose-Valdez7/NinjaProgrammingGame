@@ -150,6 +150,15 @@ export default function GamePage() {
               // TODO: guardar progreso en backend
             }
 
+            // Si no hay usuario autenticado, mostrar pantalla de login/registro
+            if (!currentUser) {
+              setTimeout(() => {
+                window.location.href = '/login?next=/game'
+              }, 1200)
+              setIsPlaying(false)
+              return
+            }
+
             if (currentLevel < 15) {
               setTimeout(() => loadLevel(currentLevel + 1), 2000)
             } else {
