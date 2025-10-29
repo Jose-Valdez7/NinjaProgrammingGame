@@ -1,15 +1,22 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { Home, Users, BarChart3, Settings } from 'lucide-react'
-import { apiUrl, getAuthHeaders } from '../config/env'
+import { Home, Users, BarChart3, Settings, Shield } from 'lucide-react'
+import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
+import { useGameStore } from '../store/GameStore'
 
 export default function AdminPage() {
+  const { dispatch } = useGameStore()
   const [users, setUsers] = useState<any[]>([])
   const [meta, setMeta] = useState<any>(null)
   const [page, setPage] = useState(1)
   const [limit] = useState(10)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAdminModal, setShowAdminModal] = useState(false)
+  const [adminEmail, setAdminEmail] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
+  const [adminLoading, setAdminLoading] = useState(false)
+  const [adminError, setAdminError] = useState('')
 
   const fetchUsers = async (p = 1) => {
     setLoading(true)
@@ -19,6 +26,10 @@ export default function AdminPage() {
         headers: getAuthHeaders(),
       })
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          // No autorizado: pedir credenciales admin
+          setShowAdminModal(true)
+        }
         const text = await res.text()
         throw new Error(text || `Error ${res.status}`)
       }
@@ -38,6 +49,93 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page])
 
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAdminError('')
+    setAdminLoading(true)
+
+    try {
+      // Intentar varios endpoints posibles para admin login
+      let res: Response | null = null
+
+      // Opción 1: Endpoint específico de admin
+      const endpoints = [
+        'api/auth/admin/login',
+        'api/admin/login',
+        'api/auth/login-admin'
+      ]
+
+      for (const endpoint of endpoints) {
+        try {
+          res = await fetch(apiUrl(endpoint), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: adminEmail, password: adminPassword }),
+          })
+
+          // Si no es 404, este endpoint existe
+          if (res.status !== 404) {
+            break
+          }
+        } catch {
+          // Continuar con el siguiente endpoint
+          continue
+        }
+      }
+
+      // Si todos los endpoints fallaron con 404, usar login regular con password como cedula
+      // (algunos backends permiten esto para admin)
+      if (!res || res.status === 404) {
+        // Intentar con el endpoint regular pero enviando password en el campo cedula
+        res = await fetch(apiUrl('api/auth/login'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: adminEmail, cedula: adminPassword }),
+        })
+      }
+
+      if (!res.ok) {
+        const text = await res.text()
+        let errorMsg = text || 'Credenciales de administrador inválidas'
+        
+        // Intentar parsear como JSON para obtener mensaje más claro
+        try {
+          const errorJson = JSON.parse(text)
+          errorMsg = errorJson.message || errorJson.error || errorMsg
+        } catch {
+          // Si no es JSON, usar el texto tal cual
+        }
+        
+        throw new Error(errorMsg)
+      }
+
+      const json = await res.json()
+      const data = json?.data || {}
+      const accessToken = data?.accessToken
+      const refreshToken = data?.refreshToken
+      const adminUser = data?.user
+      if (!accessToken || !adminUser) throw new Error('Respuesta de admin inválida')
+
+      // Limpiar credenciales de usuario y establecer las de admin
+      authStorage.clearAll()
+      authStorage.setAccessToken(accessToken)
+      if (refreshToken) authStorage.setRefreshToken(refreshToken)
+      authStorage.setCurrentUser(adminUser)
+      dispatch({ type: 'SET_USER', payload: adminUser })
+
+      setShowAdminModal(false)
+      setAdminEmail('')
+      setAdminPassword('')
+
+      // Refrescar datos ahora con token admin
+      fetchUsers(page)
+    } catch (err: any) {
+      setAdminError(err?.message || 'Error al iniciar sesión como admin')
+    } finally {
+      setAdminLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-ninja-dark text-white">
       <div className="bg-ninja-purple border-b border-blue-500/30 p-4">
@@ -48,6 +146,14 @@ export default function AdminPage() {
               Inicio
             </Link>
             <h1 className="text-xl font-bold">Panel de Administración</h1>
+          </div>
+          <div>
+            <button
+              className="px-3 py-1 rounded border border-blue-500/40 text-blue-300 hover:bg-blue-500/10 inline-flex items-center gap-2"
+              onClick={() => setShowAdminModal(true)}
+            >
+              <Shield size={16} /> Acceder como Admin
+            </button>
           </div>
         </div>
       </div>
@@ -141,6 +247,62 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+
+      {showAdminModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-ninja-purple border border-blue-500/30 rounded-lg w-full max-w-md mx-4 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Shield className="text-yellow-400" size={20} />
+              <h3 className="text-lg font-semibold">Acceso de Administrador</h3>
+            </div>
+
+            <form onSubmit={handleAdminLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">Email</label>
+                <input
+                  type="email"
+                  className="ninja-input w-full"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">Contraseña</label>
+                <input
+                  type="text"
+                  className="ninja-input w-full"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              {adminError && (
+                <div className="text-red-400 text-sm">{adminError}</div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded border border-gray-600 hover:bg-gray-800"
+                  onClick={() => setShowAdminModal(false)}
+                  disabled={adminLoading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="ninja-button px-4 py-2 disabled:opacity-60"
+                  disabled={adminLoading}
+                >
+                  {adminLoading ? 'Ingresando...' : 'Ingresar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

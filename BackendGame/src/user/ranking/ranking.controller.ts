@@ -3,7 +3,7 @@ import { RankingService } from './ranking.service';
 import { AuthGuard } from 'src/shared/auth/guards/auth.guard';
 import { RolesGuard } from 'src/shared/auth/guards/roles.guard';
 import { Roles } from 'src/shared/auth/decorators/roles.decorator';
-import { Role } from 'src/shared/auth/enums/role.enums';
+import { Role } from 'src/shared/auth/enums/role.enums'; 
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaginationDto } from 'src/common/dtos/pagination.dto';
 
@@ -11,7 +11,7 @@ import { PaginationDto } from 'src/common/dtos/pagination.dto';
 @Controller('rankings')
 @ApiTags('Rankings')
 @UseGuards(AuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@Roles(Role.USER, Role.ADMIN)
 export class RankingController {
   constructor(private readonly rankingService: RankingService) {}
 
