@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LogIn, Home } from 'lucide-react'
 import { apiUrl, authStorage } from '../config/env'
+import { useGameStore } from '../store/GameStore'
 
 export default function LoginPage() {
+  const { dispatch } = useGameStore()
   const [email, setEmail] = useState('')
   const [cedula, setCedula] = useState('')
   const [error, setError] = useState('')
@@ -34,7 +36,10 @@ export default function LoginPage() {
 
       authStorage.setAccessToken(accessToken)
       if (refreshToken) authStorage.setRefreshToken(refreshToken)
-      if (data?.user) authStorage.setCurrentUser(data.user)
+      if (data?.user) {
+        authStorage.setCurrentUser(data.user)
+        dispatch({ type: 'SET_USER', payload: data.user })
+      }
       
       // Redirigir al juego después del login exitoso
       window.location.href = '/game'
