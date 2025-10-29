@@ -29,15 +29,39 @@ export default function RegisterPage() {
     setLoading(true)
 
     try {
+      // Agregar role por defecto como "USER" para todos los registros
+      // El backend espera valores del enum Role (probablemente: USER, ADMIN, etc.)
+      const registerData = {
+        ...formData,
+        role: 'USER'
+      }
+
       const res = await fetch(apiUrl('api/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(registerData),
       })
 
       if (!res.ok) {
         const text = await res.text()
-        throw new Error(text || 'Error al registrar usuario')
+        let errorMsg = text || 'Error al registrar usuario'
+        
+        // Intentar parsear como JSON para obtener mensaje más claro
+        try {
+          const errorJson = JSON.parse(text)
+          if (Array.isArray(errorJson.message)) {
+            // Si es un array de mensajes de validación, mostrarlos todos
+            errorMsg = errorJson.message.join(', ')
+          } else if (errorJson.message) {
+            errorMsg = errorJson.message
+          } else if (errorJson.error) {
+            errorMsg = errorJson.error
+          }
+        } catch {
+          // Si no es JSON, usar el texto tal cual
+        }
+        
+        throw new Error(errorMsg)
       }
 
       const json = await res.json()

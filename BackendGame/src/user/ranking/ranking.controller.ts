@@ -11,7 +11,7 @@ import { PaginationDto } from 'src/common/dtos/pagination.dto';
 @Controller('rankings')
 @ApiTags('Rankings')
 @UseGuards(AuthGuard, RolesGuard)
-@Roles(Role.USER)
+@Roles(Role.USER, Role.ADMIN)
 export class RankingController {
   constructor(private readonly rankingService: RankingService) {}
 
