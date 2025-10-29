@@ -3,6 +3,7 @@ import { useGameStore } from '../store/GameStore'
 import { GameEngine } from '../game/GameEngine'
 import { LevelGenerator } from '../game/LevelGenerator'
 import { CommandParser } from '../game/CommandParser'
+import { GameLevel } from '../types/game'
 import { Play, RotateCcw, Home, HelpCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -12,6 +13,7 @@ export default function GamePage() {
   const gameEngineRef = useRef<GameEngine | null>(null)
   const levelGeneratorRef = useRef(new LevelGenerator())
   const commandParserRef = useRef(new CommandParser())
+  const timerRef = useRef<number | null>(null)
 
   const [commands, setCommands] = useState('')
   const [isPlaying, setIsPlaying] = useState(false)
@@ -19,6 +21,34 @@ export default function GamePage() {
   const [error, setError] = useState('')
   const [currentLevel, setCurrentLevel] = useState(1)
   const [level, setLevel] = useState<any>(null)
+  const [elapsedTime, setElapsedTime] = useState(0)
+
+  const stopTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      window.clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  const startTimer = useCallback(() => {
+    stopTimer()
+    setElapsedTime(0)
+    timerRef.current = window.setInterval(() => {
+      setElapsedTime(prev => prev + 1)
+    }, 1000)
+  }, [stopTimer])
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0')
+    const secs = Math.floor(seconds % 60).toString().padStart(2, '0')
+    return `${mins}:${secs}`
+  }
+
+  useEffect(() => {
+    return () => {
+      stopTimer()
+    }
+  }, [stopTimer])
 
   // 🧩 Inicializar motor Pixi y cargar primer nivel
   useLayoutEffect(() => {
@@ -67,7 +97,14 @@ export default function GamePage() {
     setCommands('')
     setError('')
     setCurrentLevel(levelNumber)
-  }, [commands, dispatch])
+
+    if (levelNumber >= 6) {
+      startTimer()
+    } else {
+      stopTimer()
+      setElapsedTime(0)
+    }
+  }, [commands, dispatch, startTimer, stopTimer])
 
   // 🧩 Validar y expandir comandos
   const validateAndParseCommands = () => {
@@ -78,10 +115,29 @@ export default function GamePage() {
     return parser.expandCommands(parsed)
   }
 
-  // Mostrar/ocultar guía según haya comandos
+  // Actualizar guía dinámica según lo escrito
   useEffect(() => {
-    gameEngineRef.current?.setGuideVisibility(Boolean(commands.trim()))
-  }, [commands])
+    const engine = gameEngineRef.current
+    const currentLevelData = level as GameLevel | null
+
+    if (!engine || !currentLevelData || !currentLevelData.hasGuideLines) return
+
+    const trimmed = commands.trim()
+    const hasCommands = Boolean(trimmed)
+
+    engine.setGuideVisibility(hasCommands)
+
+    if (!hasCommands) {
+      engine.previewGuideForCommands([])
+      return
+    }
+
+    const parser = commandParserRef.current
+    const parsed = parser.parseCommands(trimmed)
+    const expanded = parser.expandCommands(parsed)
+
+    engine.previewGuideForCommands(expanded)
+  }, [commands, level])
 
   // ⚡ Ejecutar comandos
   const executeCommands = async () => {
@@ -92,7 +148,7 @@ export default function GamePage() {
       setIsPlaying(true)
       setError('')
 
-      let currentPos = { x: 0, y: 14 }
+      let currentPos = { ...level.startPosition }
       let isEnergized = false
       let energyCollected = 0
 
@@ -150,6 +206,7 @@ export default function GamePage() {
               return
             }
 
+            stopTimer()
             await gameEngineRef.current.animateVictory()
             setError('')
             if (currentUser) {
@@ -196,6 +253,8 @@ export default function GamePage() {
     hasGuideLines: level.hasGuideLines,
     allowsLoops: level.allowsLoops
   } : {}
+
+  const showTimer = level && level.level >= 6
 
   return (
     <div className="min-h-screen bg-ninja-dark text-white">
@@ -254,11 +313,30 @@ export default function GamePage() {
           <div className="space-y-6">
             {/* Level Info */}
             <div className="bg-ninja-purple rounded-lg p-4 border border-blue-500/30">
-              <h3 className="font-semibold mb-3">Información del Nivel</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">Información del Nivel</h3>
+                {showTimer && (
+                  <div className="flex items-center gap-2 bg-blue-900/60 border border-blue-400/40 px-3 py-1 rounded-full shadow-md shadow-blue-500/20">
+                    <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
+                    <div className="text-sm font-semibold tracking-wide text-blue-200">
+                      {formatTime(elapsedTime)}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {level && (
                 <div className="space-y-2 text-sm">
-                  <div>⚡ Energía requerida: {levelInfo.energyRequired}</div>
-                  {levelInfo.timeLimit && <div>⏱️ Tiempo límite: {levelInfo.timeLimit}s</div>}
+                  <div className="flex items-center gap-2 text-amber-300">
+                    <span role="img" aria-label="energy">⚡</span>
+                    <span>Energía requerida: <span className="font-semibold text-white">{levelInfo.energyRequired}</span></span>
+                  </div>
+                  {levelInfo.timeLimit && (
+                    <div className="flex items-center gap-2 text-blue-200">
+                      <span role="img" aria-label="time-limit">⏱️</span>
+                      <span>Tiempo límite: <span className="font-semibold text-white">{levelInfo.timeLimit}s</span></span>
+                    </div>
+                  )}
                   {levelInfo.hasGuideLines && <div className="text-yellow-400">💡 Líneas guía disponibles</div>}
                   {levelInfo.allowsLoops && <div className="text-purple-400">🔄 Loops permitidos</div>}
                 </div>
