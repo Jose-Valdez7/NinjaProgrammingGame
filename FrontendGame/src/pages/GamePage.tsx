@@ -25,15 +25,19 @@ export default function GamePage() {
     const container = canvasContainerRef.current
     if (!container || gameEngineRef.current) return
 
-    try {
-      const width = container.clientWidth || 480
-      const height = container.clientHeight || 480
-      gameEngineRef.current = new GameEngine(container, { width, height })
-      loadLevel(currentLevel)
-    } catch (e) {
-      console.error('Error initializing GameEngine:', e)
-      setError('Error al inicializar el motor gráfico. Recarga la página.')
+    const initializeGame = async () => {
+      try {
+        const width = container.clientWidth || 480
+        const height = container.clientHeight || 480
+        gameEngineRef.current = new GameEngine(container, { width, height })
+        await loadLevel(currentLevel)
+      } catch (e) {
+        console.error('Error initializing GameEngine:', e)
+        setError('Error al inicializar el motor gráfico. Recarga la página.')
+      }
     }
+
+    initializeGame()
 
     return () => {
       if (gameEngineRef.current) {
@@ -51,18 +55,19 @@ export default function GamePage() {
   }, [currentLevel, currentUser])
 
   // 🧱 Cargar nivel
-  const loadLevel = useCallback((levelNumber: number) => {
+  const loadLevel = useCallback(async (levelNumber: number) => {
     const levelGen = levelGeneratorRef.current
     const newLevel = levelGen.generateLevel(levelNumber)
     setLevel(newLevel)
-    gameEngineRef.current?.loadLevel(newLevel)
+    await gameEngineRef.current?.loadLevel(newLevel)
+    gameEngineRef.current?.setGuideVisibility(Boolean(commands.trim()))
     gameEngineRef.current?.debugDump()
     dispatch({ type: 'SET_LEVEL', payload: newLevel })
     dispatch({ type: 'RESET_LEVEL' })
     setCommands('')
     setError('')
     setCurrentLevel(levelNumber)
-  }, [dispatch])
+  }, [commands, dispatch])
 
   // 🧩 Validar y expandir comandos
   const validateAndParseCommands = () => {
@@ -72,6 +77,11 @@ export default function GamePage() {
     const parsed = parser.parseCommands(commands)
     return parser.expandCommands(parsed)
   }
+
+  // Mostrar/ocultar guía según haya comandos
+  useEffect(() => {
+    gameEngineRef.current?.setGuideVisibility(Boolean(commands.trim()))
+  }, [commands])
 
   // ⚡ Ejecutar comandos
   const executeCommands = async () => {
