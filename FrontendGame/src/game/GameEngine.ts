@@ -487,7 +487,7 @@ export class GameEngine {
     try {
       const app = new Application()
       await app.init({
-        view: this.canvasElement,
+        canvas: this.canvasElement,
         width,
         height,
         background: 0x1a1a2e,
@@ -546,44 +546,41 @@ export class GameEngine {
     this.app = new NativeCanvasRenderer(this.canvasElement)
   }
 
-  private async ensureSpineNinja(): Promise<void> {
-    const app = this.pixiApp
-    const ninjaSprite = this.ninjaSprite
+private async ensureSpineNinja(): Promise<void> {
+  const app = this.pixiApp
+  const ninjaSprite = this.ninjaSprite
 
-    if (!app || !ninjaSprite || this.ninjaSpine) {
-      return
-    }
+  if (!app || !ninjaSprite || this.ninjaSpine) return
 
-    if (!this.spineLoadPromise) {
-      this.spineLoadPromise = (async () => {
-        try {
-          await Assets.load([
-            { alias: 'spineSkeleton', src: 'https://pixijs.com/assets/tutorials/spineboy-adventure/spineboy-pro.json' },
-            { alias: 'spineAtlas', src: 'https://pixijs.com/assets/tutorials/spineboy-adventure/spineboy-pma.atlas' },
-            { alias: 'spineTexture', src: 'https://pixijs.com/assets/tutorials/spineboy-adventure/spineboy-pma.png' },
-          ])
+  if (!this.spineLoadPromise) {
+    this.spineLoadPromise = (async () => {
+      try {
+        await Assets.load([
+            { alias: 'spineSkeleton', src: '/spine/spineboy-pro.json' },
+            { alias: 'spineAtlas', src: '/spine/spineboy-pma.atlas' },
+            { alias: 'spineTexture', src: '/spine/spineboy-pma.png' },
+        ])
 
           const spine = Spine.from({ skeleton: 'spineSkeleton', atlas: 'spineAtlas', texture: 'spineTexture' })
-          const scale = this.cellSize / 120
-          spine.scale.set(scale)
-          spine.x = 0
-          spine.y = this.cellSize / 2
-          spine.state.setAnimation(0, 'idle', true)
+        const scale = this.cellSize / 120
+        spine.scale.set(scale)
+        spine.x = 0
+        spine.y = this.cellSize / 2
 
-          this.ninjaSpine = spine
-          ninjaSprite.removeChildren()
-          ninjaSprite.addChild(spine)
-          this.setNinjaPosition(this.currentNinjaX, this.currentNinjaY)
-        } catch (error) {
-          console.warn('No se pudo cargar Spine, usando sprite manual:', error)
-          // Ya tenemos el sprite manual creado, no hacer nada más
-          this.spineLoadPromise = Promise.resolve()
-        }
-      })()
-    }
+        spine.state.setAnimation(0, 'idle', true)
 
-    await this.spineLoadPromise
+        this.ninjaSpine = spine
+        ninjaSprite.removeChildren()
+        ninjaSprite.addChild(spine)
+      } catch (error) {
+        console.warn('No se pudo cargar Spine, usando sprite manual:', error)
+      }
+    })()
   }
+
+  await this.spineLoadPromise
+}
+
 
   private playNinjaAnimation(name: string, loop = true, force = false): void {
     const spine = this.ninjaSpine
