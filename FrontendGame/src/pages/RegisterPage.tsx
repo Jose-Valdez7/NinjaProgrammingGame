@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { UserPlus, Home } from 'lucide-react'
 import { apiUrl, authStorage } from '../config/env'
+import { useGameStore } from '../store/GameStore'
 
 export default function RegisterPage() {
+  const { dispatch } = useGameStore()
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -46,7 +48,10 @@ export default function RegisterPage() {
 
       authStorage.setAccessToken(accessToken)
       if (refreshToken) authStorage.setRefreshToken(refreshToken)
-      if (data?.user) authStorage.setCurrentUser(data.user)
+      if (data?.user) {
+        authStorage.setCurrentUser(data.user)
+        dispatch({ type: 'SET_USER', payload: data.user })
+      }
       
       // Redirigir al juego después del registro exitoso
       window.location.href = '/game'

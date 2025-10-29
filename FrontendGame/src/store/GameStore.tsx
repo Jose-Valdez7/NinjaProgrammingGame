@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react'
+import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
 import { GameState, GameLevel, User } from '../types/game'
+import { authStorage } from '../config/env'
 
 interface GameContextType {
   gameState: GameState
@@ -116,6 +117,14 @@ const GameContext = createContext<GameContextType | undefined>(undefined)
 
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, initialState)
+
+  // Hidratar usuario desde localStorage al cargar la app
+  useEffect(() => {
+    const storedUser = authStorage.getCurrentUser()
+    if (storedUser) {
+      dispatch({ type: 'SET_USER', payload: storedUser })
+    }
+  }, [])
 
   return (
     <GameContext.Provider value={{
