@@ -1,10 +1,11 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Home, Users, BarChart3, Settings, Shield } from 'lucide-react'
 import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
 import { useGameStore } from '../store/GameStore'
 
 export default function AdminPage() {
+  const navigate = useNavigate()
   const { dispatch } = useGameStore()
   const [users, setUsers] = useState<any[]>([])
   const [meta, setMeta] = useState<any>(null)
@@ -286,7 +287,7 @@ export default function AdminPage() {
                 <button
                   type="button"
                   className="px-4 py-2 rounded border border-gray-600 hover:bg-gray-800"
-                  onClick={() => setShowAdminModal(false)}
+                  onClick={() => navigate(-1)}
                   disabled={adminLoading}
                 >
                   Cancelar
