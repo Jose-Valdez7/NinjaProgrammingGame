@@ -46,7 +46,7 @@ class NativeCanvasRenderer {
     return new Promise((resolve) => {
       this.ninjaState = 'walking'
       this.walkFrame = 0
-      
+
       gsap.to(this, {
         duration: 0.3,
         ease: "power2.inOut",
@@ -65,10 +65,10 @@ class NativeCanvasRenderer {
     // Activar estado energizado
     this.ninjaState = 'energized'
     this.energyLevel = 100
-    
+
     // Efecto de partículas de energía
-    const particles: Array<{x: number, y: number, vx: number, vy: number, life: number}> = []
-    
+    const particles: Array<{ x: number, y: number, vx: number, vy: number, life: number }> = []
+
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2
       particles.push({
@@ -82,7 +82,7 @@ class NativeCanvasRenderer {
 
     const animateParticles = () => {
       this.render()
-      
+
       // Dibujar partículas
       this.ctx.save()
       this.ctx.fillStyle = '#fbbf24'
@@ -90,16 +90,16 @@ class NativeCanvasRenderer {
         this.ctx.beginPath()
         this.ctx.arc(particle.x, particle.y, 4, 0, Math.PI * 2)
         this.ctx.fill()
-        
+
         particle.x += particle.vx
         particle.y += particle.vy
         particle.life--
       })
       this.ctx.restore()
-      
+
       // Reducir energía gradualmente
       this.energyLevel -= 2
-      
+
       // Continuar animación si hay partículas vivas o energía
       if (particles.some(p => p.life > 0) || this.energyLevel > 0) {
         requestAnimationFrame(animateParticles)
@@ -108,23 +108,23 @@ class NativeCanvasRenderer {
         this.energyLevel = 0
       }
     }
-    
+
     animateParticles()
   }
 
   animateFailure(type: 'void' | 'snake'): Promise<void> {
     return new Promise((resolve) => {
       this.ninjaState = 'falling'
-      
+
       if (type === 'void') {
         // Animación de caída al vacío
         let rotation = 0
         let scale = 1
         let alpha = 1
-        
+
         const animateFall = () => {
           this.render()
-          
+
           // Dibujar ninja con efectos de caída
           this.ctx.save()
           this.ctx.translate(
@@ -134,16 +134,16 @@ class NativeCanvasRenderer {
           this.ctx.rotate(rotation)
           this.ctx.scale(scale, scale)
           this.ctx.globalAlpha = alpha
-          
+
           this.drawNinja(0, 0)
-          
+
           this.ctx.restore()
-          
+
           // Actualizar valores
           rotation += 0.3
           scale -= 0.02
           alpha -= 0.02
-          
+
           if (alpha > 0) {
             requestAnimationFrame(animateFall)
           } else {
@@ -151,31 +151,31 @@ class NativeCanvasRenderer {
             resolve()
           }
         }
-        
+
         animateFall()
       } else {
         // Animación de mordida de serpiente
         let shakeX = 0
         let shakeCount = 0
-        
+
         const animateShake = () => {
           this.render()
-          
+
           // Dibujar ninja con temblor
           this.ctx.save()
           this.ctx.translate(
             this.ninjaX * this.cellSize + this.cellSize / 2 + shakeX,
             this.ninjaY * this.cellSize + this.cellSize / 2
           )
-          
+
           this.drawNinja(0, 0)
-          
+
           this.ctx.restore()
-          
+
           // Actualizar temblor
           shakeX = Math.sin(shakeCount * 0.5) * 5
           shakeCount++
-          
+
           if (shakeCount < 20) {
             requestAnimationFrame(animateShake)
           } else {
@@ -183,7 +183,7 @@ class NativeCanvasRenderer {
             resolve()
           }
         }
-        
+
         animateShake()
       }
     })
@@ -192,14 +192,14 @@ class NativeCanvasRenderer {
   animateVictory(): Promise<void> {
     return new Promise((resolve) => {
       this.ninjaState = 'victory'
-      
+
       // Efecto de luz expansiva
       let lightRadius = 0
       let lightAlpha = 1
-      
+
       const animateLight = () => {
         this.render()
-        
+
         // Dibujar luz de victoria
         this.ctx.save()
         this.ctx.globalAlpha = lightAlpha
@@ -214,11 +214,11 @@ class NativeCanvasRenderer {
         )
         this.ctx.fill()
         this.ctx.restore()
-        
+
         // Actualizar valores
         lightRadius += 8
         lightAlpha -= 0.05
-        
+
         if (lightAlpha > 0) {
           requestAnimationFrame(animateLight)
         } else {
@@ -226,7 +226,7 @@ class NativeCanvasRenderer {
           resolve()
         }
       }
-      
+
       animateLight()
     })
   }
@@ -234,79 +234,79 @@ class NativeCanvasRenderer {
   private drawNinja(x: number, y: number): void {
     this.ctx.save()
     this.ctx.translate(x, y)
-    
+
     // Efectos de energía si está energizado
     if (this.ninjaState === 'energized' || this.energyLevel > 0) {
       this.drawEnergyEffects()
     }
-    
+
     // Dibujar sombra
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
     this.ctx.beginPath()
     this.ctx.ellipse(0, 20, 8, 4, 0, 0, Math.PI * 2)
     this.ctx.fill()
-    
+
     // Cuerpo del ninja (traje azul oscuro)
     this.ctx.fillStyle = '#1e3a8a'
     this.ctx.fillRect(-8, -15, 16, 25)
-    
+
     // Capucha
     this.ctx.fillStyle = '#1e3a8a'
     this.ctx.beginPath()
     this.ctx.arc(0, -8, 12, Math.PI, 0)
     this.ctx.fill()
-    
+
     // Cinta roja en la cabeza
     this.ctx.fillStyle = '#dc2626'
     this.ctx.fillRect(-10, -12, 20, 3)
-    
+
     // Letra "N" en la cinta
     this.ctx.fillStyle = '#ffffff'
     this.ctx.font = 'bold 8px Arial'
     this.ctx.textAlign = 'center'
     this.ctx.fillText('N', 0, -8)
-    
+
     // Máscara/cara
     this.ctx.fillStyle = '#fbbf24'
     this.ctx.fillRect(-6, -6, 12, 8)
-    
+
     // Ojos grandes y expresivos
     this.ctx.fillStyle = '#ffffff'
     this.ctx.beginPath()
     this.ctx.arc(-3, -2, 3, 0, Math.PI * 2)
     this.ctx.arc(3, -2, 3, 0, Math.PI * 2)
     this.ctx.fill()
-    
+
     // Pupilas
     this.ctx.fillStyle = '#000000'
     this.ctx.beginPath()
     this.ctx.arc(-3, -2, 2, 0, Math.PI * 2)
     this.ctx.arc(3, -2, 2, 0, Math.PI * 2)
     this.ctx.fill()
-    
+
     // Brillo en los ojos
     this.ctx.fillStyle = '#ffffff'
     this.ctx.beginPath()
     this.ctx.arc(-2.5, -2.5, 0.5, 0, Math.PI * 2)
     this.ctx.arc(3.5, -2.5, 0.5, 0, Math.PI * 2)
     this.ctx.fill()
-    
+
     // Brazos con animación de caminar
     const armOffset = this.ninjaState === 'walking' ? Math.sin(this.walkFrame * 0.3) * 2 : 0
     this.ctx.fillStyle = '#1e3a8a'
     this.ctx.fillRect(-12, -5 + armOffset, 4, 12)
     this.ctx.fillRect(8, -5 - armOffset, 4, 12)
-    
+
     // Piernas con animación de caminar
     const legOffset = this.ninjaState === 'walking' ? Math.sin(this.walkFrame * 0.3 + Math.PI) * 1.5 : 0
     this.ctx.fillStyle = '#1e3a8a'
     this.ctx.fillRect(-6, 8 + legOffset, 3, 8)
     this.ctx.fillRect(3, 8 - legOffset, 3, 8)
-    
+
     // Cinturón rojo
     this.ctx.fillStyle = '#dc2626'
     this.ctx.fillRect(-8, 5, 16, 3)
-    
+
     // Dispositivos en el cinturón
     this.ctx.fillStyle = '#22c55e'
     this.ctx.fillRect(-6, 6, 2, 2)
@@ -316,7 +316,7 @@ class NativeCanvasRenderer {
     this.ctx.fillRect(0, 6, 2, 2)
     this.ctx.fillStyle = '#6b7280'
     this.ctx.fillRect(3, 6, 2, 2)
-    
+
     // Cables conectados
     this.ctx.strokeStyle = '#374151'
     this.ctx.lineWidth = 1
@@ -330,27 +330,27 @@ class NativeCanvasRenderer {
     this.ctx.moveTo(3, 8)
     this.ctx.lineTo(3, 15)
     this.ctx.stroke()
-    
+
     // Ratones en el suelo
     this.ctx.fillStyle = '#6b7280'
     this.ctx.fillRect(-15, 15, 4, 2)
     this.ctx.fillRect(-8, 18, 4, 2)
     this.ctx.fillRect(5, 16, 4, 2)
-    
+
     this.ctx.restore()
   }
-  
+
   private drawEnergyEffects(): void {
     // Rayos de energía alrededor del ninja
     this.ctx.strokeStyle = '#fbbf24'
     this.ctx.lineWidth = 2
     this.ctx.globalAlpha = 0.8
-    
+
     for (let i = 0; i < 8; i++) {
       const angle = (i / 8) * Math.PI * 2 + this.animationTime * 0.1
       const startRadius = 15
       const endRadius = 25 + Math.sin(this.animationTime * 0.2) * 5
-      
+
       this.ctx.beginPath()
       this.ctx.moveTo(
         Math.cos(angle) * startRadius,
@@ -362,7 +362,7 @@ class NativeCanvasRenderer {
       )
       this.ctx.stroke()
     }
-    
+
     // Aura de energía
     this.ctx.strokeStyle = '#fbbf24'
     this.ctx.lineWidth = 3
@@ -370,7 +370,7 @@ class NativeCanvasRenderer {
     this.ctx.beginPath()
     this.ctx.arc(0, 0, 20 + Math.sin(this.animationTime * 0.3) * 3, 0, Math.PI * 2)
     this.ctx.stroke()
-    
+
     this.ctx.globalAlpha = 1
   }
 
@@ -410,17 +410,17 @@ class NativeCanvasRenderer {
           this.ctx.strokeStyle = '#fbbf24'
           this.ctx.lineWidth = 3
           this.ctx.globalAlpha = 0.7
-          
+
           const centerX = pixelX + this.cellSize / 2
           const centerY = pixelY + this.cellSize / 2
-          
+
           this.ctx.beginPath()
           this.ctx.moveTo(pixelX + this.cellSize / 4, centerY)
           this.ctx.lineTo(pixelX + 3 * this.cellSize / 4, centerY)
           this.ctx.moveTo(centerX, pixelY + this.cellSize / 4)
           this.ctx.lineTo(centerX, pixelY + 3 * this.cellSize / 4)
           this.ctx.stroke()
-          
+
           this.ctx.globalAlpha = 1
         }
       }
@@ -429,7 +429,7 @@ class NativeCanvasRenderer {
     // Dibujar ninja completo
     const ninjaPixelX = this.ninjaX * this.cellSize + this.cellSize / 2
     const ninjaPixelY = this.ninjaY * this.cellSize + this.cellSize / 2
-    
+
     this.drawNinja(ninjaPixelX, ninjaPixelY)
 
     // Actualizar animación
@@ -458,13 +458,16 @@ export class GameEngine {
   private ninjaSprite: Container | null = null
   private ninjaSpine: Spine | null = null
   private spineLoadPromise: Promise<void> | null = null
-  private readonly cellSize = 32
-  private readonly gridSize = 15
+  private readonly cellSize: number
+  private readonly gridSize: number
   private currentNinjaX = 0
   private currentNinjaY = 0
+  private ready = false
 
   constructor(container: HTMLElement, options?: GameEngineOptions) {
     this.container = container
+    this.cellSize = options?.cellSize ?? 32
+    this.gridSize = options?.gridSize ?? 15
 
     const gameWidth = options?.width ?? 480
     const gameHeight = options?.height ?? 480
@@ -498,9 +501,11 @@ export class GameEngine {
 
       this.app = app
       this.initializePixiScene()
+      this.ready = true
     } catch (error) {
       console.warn('No fue posible inicializar PixiJS, usando renderer nativo.', error)
       this.switchToNativeRenderer(width, height)
+      this.ready = true
     }
   }
 
@@ -546,40 +551,40 @@ export class GameEngine {
     this.app = new NativeCanvasRenderer(this.canvasElement)
   }
 
-private async ensureSpineNinja(): Promise<void> {
-  const app = this.pixiApp
-  const ninjaSprite = this.ninjaSprite
+  private async ensureSpineNinja(): Promise<void> {
+    const app = this.pixiApp
+    const ninjaSprite = this.ninjaSprite
 
-  if (!app || !ninjaSprite || this.ninjaSpine) return
+    if (!app || !ninjaSprite || this.ninjaSpine) return
 
-  if (!this.spineLoadPromise) {
-    this.spineLoadPromise = (async () => {
-      try {
-        await Assets.load([
+    if (!this.spineLoadPromise) {
+      this.spineLoadPromise = (async () => {
+        try {
+          await Assets.load([
             { alias: 'spineSkeleton', src: '/spine/spineboy-pro.json' },
             { alias: 'spineAtlas', src: '/spine/spineboy-pma.atlas' },
             { alias: 'spineTexture', src: '/spine/spineboy-pma.png' },
-        ])
+          ])
 
           const spine = Spine.from({ skeleton: 'spineSkeleton', atlas: 'spineAtlas', texture: 'spineTexture' })
-        const scale = this.cellSize / 120
-        spine.scale.set(scale)
-        spine.x = 0
-        spine.y = this.cellSize / 2
+          const scale = this.cellSize / 120
+          spine.scale.set(scale)
+          spine.x = 0
+          spine.y = this.cellSize / 2
 
-        spine.state.setAnimation(0, 'idle', true)
+          spine.state.setAnimation(0, 'idle', true)
 
-        this.ninjaSpine = spine
-        ninjaSprite.removeChildren()
-        ninjaSprite.addChild(spine)
-      } catch (error) {
-        console.warn('No se pudo cargar Spine, usando sprite manual:', error)
-      }
-    })()
+          this.ninjaSpine = spine
+          ninjaSprite.removeChildren()
+          ninjaSprite.addChild(spine)
+        } catch (error) {
+          console.warn('No se pudo cargar Spine, usando sprite manual:', error)
+        }
+      })()
+    }
+
+    await this.spineLoadPromise
   }
-
-  await this.spineLoadPromise
-}
 
 
   private playNinjaAnimation(name: string, loop = true, force = false): void {
@@ -653,7 +658,12 @@ private async ensureSpineNinja(): Promise<void> {
     return graphics
   }
 
-  public loadLevel(level: GameLevel): void {
+  public async loadLevel(level: GameLevel): Promise<void> {
+    // Esperar a que el renderer esté listo
+    while (!this.ready) {
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+
     const native = this.nativeRenderer
     if (native) {
       native.loadLevel(level)
@@ -723,27 +733,17 @@ private async ensureSpineNinja(): Promise<void> {
     }
   }
 
-  public animateNinjaMovement(_fromX: number, _fromY: number, toX: number, toY: number): Promise<void> {
-    const native = this.nativeRenderer
-    if (native) {
-      return native.animateNinjaMovement(_fromX, _fromY, toX, toY)
-    }
-
-    void this.ensureSpineNinja()
-    this.playNinjaAnimation('walk', true, true)
-
-    const ninjaSprite = this.ninjaSprite
-    if (!ninjaSprite) {
-      return Promise.resolve()
-    }
+  public async animateNinjaMovement(fromX: number, fromY: number, toX: number, toY: number): Promise<void> {
+    await this.ensureSpineNinja()
+    this.playNinjaAnimation('walk', true)
 
     return new Promise((resolve) => {
-      const toPixelX = toX * this.cellSize + this.cellSize / 2
-      const toPixelY = toY * this.cellSize + this.cellSize / 2
+      const ninjaSprite = this.ninjaSprite
+      if (!ninjaSprite) return resolve()
 
       gsap.to(ninjaSprite, {
-        x: toPixelX,
-        y: toPixelY,
+        x: toX * this.cellSize + this.cellSize / 2,
+        y: toY * this.cellSize + this.cellSize / 2,
         duration: 0.3,
         ease: 'power2.inOut',
         onComplete: () => {
@@ -753,6 +753,7 @@ private async ensureSpineNinja(): Promise<void> {
       })
     })
   }
+
 
   public animateEnergyCollection(): void {
     const native = this.nativeRenderer
