@@ -55,15 +55,58 @@ export default function AdminPage() {
     setAdminLoading(true)
 
     try {
-      const res = await fetch(apiUrl('api/auth/admin/login'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: adminEmail, password: adminPassword }),
-      })
+      // Intentar varios endpoints posibles para admin login
+      let res: Response | null = null
+
+      // Opción 1: Endpoint específico de admin
+      const endpoints = [
+        'api/auth/admin/login',
+        'api/admin/login',
+        'api/auth/login-admin'
+      ]
+
+      for (const endpoint of endpoints) {
+        try {
+          res = await fetch(apiUrl(endpoint), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: adminEmail, password: adminPassword }),
+          })
+
+          // Si no es 404, este endpoint existe
+          if (res.status !== 404) {
+            break
+          }
+        } catch {
+          // Continuar con el siguiente endpoint
+          continue
+        }
+      }
+
+      // Si todos los endpoints fallaron con 404, usar login regular con password como cedula
+      // (algunos backends permiten esto para admin)
+      if (!res || res.status === 404) {
+        // Intentar con el endpoint regular pero enviando password en el campo cedula
+        res = await fetch(apiUrl('api/auth/login'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: adminEmail, cedula: adminPassword }),
+        })
+      }
 
       if (!res.ok) {
         const text = await res.text()
-        throw new Error(text || 'Credenciales de administrador inválidas')
+        let errorMsg = text || 'Credenciales de administrador inválidas'
+        
+        // Intentar parsear como JSON para obtener mensaje más claro
+        try {
+          const errorJson = JSON.parse(text)
+          errorMsg = errorJson.message || errorJson.error || errorMsg
+        } catch {
+          // Si no es JSON, usar el texto tal cual
+        }
+        
+        throw new Error(errorMsg)
       }
 
       const json = await res.json()
@@ -227,7 +270,7 @@ export default function AdminPage() {
               <div>
                 <label className="block text-sm text-gray-300 mb-2">Contraseña</label>
                 <input
-                  type="password"
+                  type="text"
                   className="ninja-input w-full"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}

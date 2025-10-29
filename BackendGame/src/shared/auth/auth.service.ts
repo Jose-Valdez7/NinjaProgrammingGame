@@ -18,6 +18,7 @@ import {
 } from 'src/common/exceptions';
 import { LoggerService } from '../logger/logger.service';
 import { BaseResponseDto } from 'src/common/dtos/response.dto';
+import { Role } from './enums/role.enums';
 
 @Injectable()
 export class AuthService {
@@ -64,7 +65,7 @@ export class AuthService {
           lastName, 
           cedula,  
           phone,
-          role,
+          role: Role.USER,
         },
       });
 
