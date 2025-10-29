@@ -43,25 +43,25 @@ export default function HomePage() {
 
   if (isLoadingStory) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center background-overlay">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-400 mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold text-white mb-2">Cargando Historia...</h2>
-          <p className="text-gray-300">Preparando la aventura de Debian</p>
+          <h2 className="text-2xl font-bold text-white mb-2 font-stick">Cargando Historia...</h2>
+          <p className="text-gray-300 font-japanese">Preparando la aventura de Debian</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-ninja-dark via-ninja-purple to-ninja-blue flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center background-overlay">
       <div className="max-w-4xl mx-auto px-6 text-center">
         {/* Logo and Title */}
         <div className="mb-12">
-          <h1 className="text-6xl font-bold text-white mb-4 font-game">
+          <h1 className="text-6xl font-bold text-white mb-4 font-stick">
             🥷 NINJA 404
           </h1>
-          <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+          <p className="text-xl text-gray-300 max-w-2xl mx-auto font-japanese">
             La historia de Debian y su aventura dentro del código. Programa tu camino hacia la victoria 
             y ayuda a Debian a escapar del juego.
           </p>
@@ -69,7 +69,7 @@ export default function HomePage() {
 
         {/* Game Features */}
         <div className="grid md:grid-cols-3 gap-6 mb-12">
-          <div className="bg-black/30 backdrop-blur-sm rounded-lg p-6 border border-blue-500/30">
+          <div className="bg-black/30 backdrop-blur-sm rounded-lg p-6 border border-blue-500/30 font-stick">
             <div className="text-4xl mb-4">⚡</div>
             <h3 className="text-lg font-semibold text-white mb-2">Energía y Estrategia</h3>
             <p className="text-gray-400 text-sm">
@@ -77,7 +77,7 @@ export default function HomePage() {
             </p>
           </div>
           
-          <div className="bg-black/30 backdrop-blur-sm rounded-lg p-6 border border-purple-500/30">
+          <div className="bg-black/30 backdrop-blur-sm rounded-lg p-6 border border-purple-500/30 font-stick">
             <div className="text-4xl mb-4">🧠</div>
             <h3 className="text-lg font-semibold text-white mb-2">Programación Visual</h3>
             <p className="text-gray-400 text-sm">
@@ -85,7 +85,7 @@ export default function HomePage() {
             </p>
           </div>
           
-          <div className="bg-black/30 backdrop-blur-sm rounded-lg p-6 border border-green-500/30">
+          <div className="bg-black/30 backdrop-blur-sm rounded-lg p-6 border border-green-500/30 font-stick">
             <div className="text-4xl mb-4">🏆</div>
             <h3 className="text-lg font-semibold text-white mb-2">Competencia Global</h3>
             <p className="text-gray-400 text-sm">
@@ -118,14 +118,14 @@ export default function HomePage() {
             <Link 
               to="/ranking" 
               className="bg-black/50 hover:bg-black/70 text-white px-6 py-3 rounded-lg 
-                         transition-all duration-300 flex items-center gap-2"
+                         transition-all duration-300 flex items-center gap-2 font-stick"
             >
               <Trophy size={20} />
               Ranking
             </Link>
             
             <button className="bg-black/50 hover:bg-black/70 text-white px-6 py-3 rounded-lg 
-                             transition-all duration-300 flex items-center gap-2">
+                             transition-all duration-300 flex items-center gap-2 font-stick">
               <Info size={20} />
               Cómo Jugar
             </button>
@@ -133,7 +133,7 @@ export default function HomePage() {
             <Link 
               to="/admin" 
               className="bg-black/50 hover:bg-black/70 text-white px-6 py-3 rounded-lg 
-                         transition-all duration-300 flex items-center gap-2"
+                         transition-all duration-300 flex items-center gap-2 font-stick"
             >
               <Settings size={20} />
               Admin
@@ -142,14 +142,14 @@ export default function HomePage() {
         </div>
 
         {/* Level Preview */}
-        <div className="mt-16 bg-black/20 backdrop-blur-sm rounded-lg p-8 border border-white/10">
+        <div className="mt-16 bg-black/20 backdrop-blur-sm rounded-lg p-8 border border-white/10 font-stick">
           <h2 className="text-2xl font-semibold text-white mb-6">15 Niveles de Desafío</h2>
           <div className="grid grid-cols-5 gap-2 max-w-md mx-auto">
             {Array.from({ length: 15 }, (_, i) => (
               <div 
                 key={i + 1}
                 className={`
-                  w-12 h-12 rounded-lg flex items-center justify-center font-bold
+                  w-12 h-12 rounded-lg flex items-center justify-center font-bold font-stick
                   ${i < 5 ? 'bg-green-600' : i < 10 ? 'bg-yellow-600' : 'bg-red-600'}
                   text-white text-sm
                 `}
@@ -175,7 +175,7 @@ export default function HomePage() {
         </div>
 
         {/* Footer */}
-        <div className="mt-12 text-gray-500 text-sm">
+        <div className="mt-12 text-gray-500 text-sm font-stick">
           <p>Desarrollado con ❤️ usando React, Pixi.js y TypeScript</p>
         </div>
       </div>
