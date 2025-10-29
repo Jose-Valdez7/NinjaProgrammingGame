@@ -463,6 +463,9 @@ export class GameEngine {
   private currentNinjaX = 0
   private currentNinjaY = 0
   private ready = false
+  private currentLevelData: GameLevel | null = null
+  private guideOverlay: Graphics | null = null
+  private guideVisible = false
 
   constructor(container: HTMLElement, options?: GameEngineOptions) {
     this.container = container
@@ -567,7 +570,7 @@ export class GameEngine {
           ])
 
           const spine = Spine.from({ skeleton: 'spineSkeleton', atlas: 'spineAtlas', texture: 'spineTexture' })
-          const scale = this.cellSize / 120
+          const scale = (this.cellSize / 120) * 0.6
           spine.scale.set(scale)
           spine.x = 0
           spine.y = this.cellSize / 2
@@ -697,23 +700,139 @@ export class GameEngine {
           this.addEnergyGlow(cellSprite)
         }
 
-        if (level.hasGuideLines && cell.isPath) {
-          this.addGuideLine(cellSprite)
-        }
-
         gridContainer.addChild(cellSprite)
       }
     }
 
     this.setNinjaPosition(level.startPosition.x, level.startPosition.y)
+    this.updateGuideOverlay(level)
   }
 
   private addEnergyGlow(graphics: Graphics): void {
     graphics.stroke({ color: 0xfbbf24, width: 2, alpha: 0.8 }).circle(this.cellSize / 2, this.cellSize / 2, this.cellSize / 2 - 2).stroke()
   }
 
-  private addGuideLine(graphics: Graphics): void {
-    graphics.stroke({ color: 0xfbbf24, width: 2, alpha: 0.7 }).moveTo(this.cellSize / 4, this.cellSize / 2).lineTo((3 * this.cellSize) / 4, this.cellSize / 2).moveTo(this.cellSize / 2, this.cellSize / 4).lineTo(this.cellSize / 2, (3 * this.cellSize) / 4).stroke()
+  private updateGuideOverlay(level: GameLevel): void {
+    this.currentLevelData = level
+
+    const gridContainer = this.gridContainer
+    const app = this.pixiApp
+    if (!gridContainer || !app) return
+
+    if (this.guideOverlay) {
+      gridContainer.removeChild(this.guideOverlay)
+      this.guideOverlay.destroy()
+      this.guideOverlay = null
+    }
+
+    if (!level.hasGuideLines) {
+      return
+    }
+
+    const path = this.buildGuidePath(level)
+    if (path.length < 2) {
+      return
+    }
+
+    const overlay = new Graphics()
+    overlay.stroke({ color: 0xfbbf24, width: 3, alpha: 0.9 })
+
+    const firstPoint = this.cellCenter(path[0])
+    overlay.moveTo(firstPoint.x, firstPoint.y)
+
+    for (let i = 1; i < path.length; i++) {
+      const point = this.cellCenter(path[i])
+      overlay.lineTo(point.x, point.y)
+    }
+
+    overlay.stroke()
+
+    // Dibujar flecha en la punta
+    const lastPoint = this.cellCenter(path[path.length - 1])
+    const prevPoint = this.cellCenter(path[path.length - 2])
+    const arrow = this.createArrow(lastPoint, prevPoint)
+    overlay.addChild(arrow)
+
+    overlay.visible = this.guideVisible
+    overlay.zIndex = 10
+
+    gridContainer.addChild(overlay)
+    this.guideOverlay = overlay
+  }
+
+  private createArrow(tip: { x: number; y: number }, prev: { x: number; y: number }): Graphics {
+    const arrow = new Graphics()
+    const dx = tip.x - prev.x
+    const dy = tip.y - prev.y
+    const length = Math.hypot(dx, dy) || 1
+    const nx = dx / length
+    const ny = dy / length
+    const arrowLength = this.cellSize * 0.5
+    const arrowWidth = this.cellSize * 0.4
+
+    const baseX = tip.x - nx * arrowLength
+    const baseY = tip.y - ny * arrowLength
+    const leftX = baseX + (-ny) * (arrowWidth / 2)
+    const leftY = baseY + nx * (arrowWidth / 2)
+    const rightX = baseX - (-ny) * (arrowWidth / 2)
+    const rightY = baseY - nx * (arrowWidth / 2)
+
+    arrow.fill({ color: 0xfbbf24, alpha: 0.9 })
+      .moveTo(tip.x, tip.y)
+      .lineTo(leftX, leftY)
+      .lineTo(rightX, rightY)
+      .fill()
+
+    return arrow
+  }
+
+  private cellCenter(pos: { x: number; y: number }): { x: number; y: number } {
+    return {
+      x: pos.x * this.cellSize + this.cellSize / 2,
+      y: pos.y * this.cellSize + this.cellSize / 2,
+    }
+  }
+
+  private buildGuidePath(level: GameLevel): { x: number; y: number }[] {
+    const segments: { x: number; y: number }[] = []
+    let current = { ...level.startPosition }
+
+    const targets = [...level.energyPositions]
+    targets.push(level.doorPosition)
+
+    segments.push({ ...current })
+
+    for (const target of targets) {
+      const path = this.buildStraightPath(current, target)
+      segments.push(...path)
+      current = { ...target }
+    }
+
+    return segments
+  }
+
+  private buildStraightPath(start: { x: number; y: number }, end: { x: number; y: number }): { x: number; y: number }[] {
+    const path: { x: number; y: number }[] = []
+    const current = { ...start }
+
+    while (current.x !== end.x) {
+      current.x += current.x < end.x ? 1 : -1
+      path.push({ ...current })
+    }
+
+    while (current.y !== end.y) {
+      current.y += current.y < end.y ? 1 : -1
+      path.push({ ...current })
+    }
+
+    return path
+  }
+
+  public setGuideVisibility(visible: boolean): void {
+    this.guideVisible = visible
+    if (this.guideOverlay) {
+      this.guideOverlay.visible = visible
+    }
   }
 
   public setNinjaPosition(x: number, y: number): void {

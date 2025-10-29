@@ -60,13 +60,14 @@ export default function GamePage() {
     const newLevel = levelGen.generateLevel(levelNumber)
     setLevel(newLevel)
     await gameEngineRef.current?.loadLevel(newLevel)
+    gameEngineRef.current?.setGuideVisibility(Boolean(commands.trim()))
     gameEngineRef.current?.debugDump()
     dispatch({ type: 'SET_LEVEL', payload: newLevel })
     dispatch({ type: 'RESET_LEVEL' })
     setCommands('')
     setError('')
     setCurrentLevel(levelNumber)
-  }, [dispatch])
+  }, [commands, dispatch])
 
   // 🧩 Validar y expandir comandos
   const validateAndParseCommands = () => {
@@ -76,6 +77,11 @@ export default function GamePage() {
     const parsed = parser.parseCommands(commands)
     return parser.expandCommands(parsed)
   }
+
+  // Mostrar/ocultar guía según haya comandos
+  useEffect(() => {
+    gameEngineRef.current?.setGuideVisibility(Boolean(commands.trim()))
+  }, [commands])
 
   // ⚡ Ejecutar comandos
   const executeCommands = async () => {
