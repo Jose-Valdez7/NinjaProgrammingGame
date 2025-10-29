@@ -127,7 +127,7 @@ export const StorySequence: React.FC<StorySequenceProps> = ({ onComplete, autoSt
 
   if (showFullStory) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 background-overlay">
         <div className="bg-black/90 backdrop-blur-sm rounded-2xl p-8 max-w-4xl w-full border border-purple-500/30 animate-fadeIn">
           <div className="text-center mb-6">
             <h1 className="text-4xl font-bold text-white mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent animate-pulse">
@@ -164,7 +164,7 @@ export const StorySequence: React.FC<StorySequenceProps> = ({ onComplete, autoSt
   }
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 z-50 overflow-hidden">
+    <div className="fixed inset-0 z-50 overflow-hidden background-overlay">
       {/* Background Animation */}
       <div className="absolute inset-0 bg-black/20"></div>
       <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-blue-500/10 animate-pulse"></div>
@@ -173,7 +173,7 @@ export const StorySequence: React.FC<StorySequenceProps> = ({ onComplete, autoSt
       <div className="relative h-full flex flex-col">
         {/* Header - Overlay */}
         <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-10 animate-fadeInDown">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent animate-pulse drop-shadow-lg">
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent animate-pulse drop-shadow-lg font-stick">
             NINJA 404
           </h1>
         </div>
@@ -232,10 +232,10 @@ export const StorySequence: React.FC<StorySequenceProps> = ({ onComplete, autoSt
             {/* Story Box with Glass Effect */}
             <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-sm rounded-xl p-6 border border-purple-400/50 transition-all duration-500 max-w-4xl mx-auto animate-slideInRight">
               <div className="text-center">
-                <h3 className="text-white text-lg font-semibold mb-4 bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">
+                <h3 className="text-white text-lg font-semibold mb-4 bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent font-japanese-serif">
                   NINJA 404 - Parte {currentImage + 1}
                 </h3>
-                <p className="text-white text-sm leading-relaxed animate-fadeIn text-left">
+                <p className="text-white text-sm leading-relaxed animate-fadeIn text-left font-japanese">
                   {displayedText}
                   {isTyping && <span className="typing-cursor text-purple-400">|</span>}
                 </p>
