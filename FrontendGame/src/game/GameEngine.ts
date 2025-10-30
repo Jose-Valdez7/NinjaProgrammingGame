@@ -1,7 +1,13 @@
 import { Application, Assets, Container, Graphics, Text } from 'pixi.js'
+import { Sprite, Texture } from 'pixi.js'
 import { Spine } from '@esotericsoftware/spine-pixi-v8'
 import { gsap } from 'gsap'
 import { GameLevel, CellType } from '../types/game'
+import grassPng from '@/assets/images/textures/grass.png'
+import blackholePng from '@/assets/images/textures/blackhole.png'
+import snakePng from '@/assets/images/textures/snake.png'
+import doorPng from '@/assets/images/textures/door.png'
+import energyPng from '@/assets/images/textures/energy.png'
 
 // Sistema de sprites avanzado con Canvas HTML5 nativo
 class NativeCanvasRenderer {
@@ -378,7 +384,7 @@ class NativeCanvasRenderer {
     if (!this.level) return
 
     // Limpiar canvas
-    this.ctx.fillStyle = '#1a1a2e'
+    this.ctx.fillStyle = '#22c55e'
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
 
     // Dibujar grid
@@ -447,6 +453,8 @@ class NativeCanvasRenderer {
 type GameEngineOptions = {
   width?: number
   height?: number
+  cellSize?: number
+  gridSize?: number
 }
 
 export class GameEngine {
@@ -458,6 +466,7 @@ export class GameEngine {
   private ninjaSprite: Container | null = null
   private ninjaSpine: Spine | null = null
   private spineLoadPromise: Promise<void> | null = null
+  private textures: Record<string, Texture> = {}
   private readonly cellSize: number
   private readonly gridSize: number
   private currentNinjaX = 0
@@ -469,7 +478,7 @@ export class GameEngine {
 
   constructor(container: HTMLElement, options?: GameEngineOptions) {
     this.container = container
-    this.cellSize = options?.cellSize ?? 32
+    this.cellSize = options?.cellSize ?? 48
     this.gridSize = options?.gridSize ?? 15
 
     const gameWidth = options?.width ?? 480
@@ -496,7 +505,7 @@ export class GameEngine {
         canvas: this.canvasElement,
         width,
         height,
-        background: 0x1a1a2e,
+        background: 0x22c55e,
         antialias: true,
         resolution: 1,
         powerPreference: 'high-performance',
@@ -537,6 +546,8 @@ export class GameEngine {
     this.ninjaSprite = ninjaSprite
 
     void this.ensureSpineNinja()
+    // Cargar texturas de celdas
+    void this.loadTextures()
   }
 
   private switchToNativeRenderer(width: number, height: number): void {
@@ -569,7 +580,7 @@ export class GameEngine {
             { alias: 'spineTexture', src: '/spine/spineboy-pma.png' },
           ])
 
-          const spine = Spine.from({ skeleton: 'spineSkeleton', atlas: 'spineAtlas', texture: 'spineTexture' })
+          const spine = Spine.from({ skeleton: 'spineSkeleton', atlas: 'spineAtlas' } as any)
           const scale = (this.cellSize / 120) * 0.6
           spine.scale.set(scale)
           spine.x = 0
@@ -644,21 +655,57 @@ export class GameEngine {
     return container
   }
 
-  private createCellSprite(cellType: CellType): Graphics {
-    const graphics = new Graphics()
+  private async loadTextures(): Promise<void> {
+    try {
+      await Assets.load([
+        { alias: 'texGrass', src: grassPng },
+        { alias: 'texVoid', src: blackholePng },
+        { alias: 'texSnake', src: snakePng },
+        { alias: 'texDoor', src: doorPng },
+        { alias: 'texEnergy', src: energyPng },
+      ])
 
-    const colors: Record<CellType, number> = {
-      [CellType.SAFE]: 0x22c55e,
-      [CellType.ENERGY]: 0xfbbf24,
-      [CellType.VOID]: 0x000000,
-      [CellType.SNAKE]: 0xdc2626,
-      [CellType.DOOR]: 0x2563eb,
+      this.textures = {
+        grass: Assets.get('texGrass'),
+        void: Assets.get('texVoid'),
+        snake: Assets.get('texSnake'),
+        door: Assets.get('texDoor'),
+        energy: Assets.get('texEnergy'),
+      }
+    } catch (e) {
+      console.warn('No se pudieron cargar las texturas del tablero:', e)
+    }
+  }
+
+  private createCellSprite(cellType: CellType): Container {
+    const container = new Container()
+
+    const texMap: Partial<Record<CellType, Texture>> = {
+      [CellType.SAFE]: this.textures.grass,
+      [CellType.VOID]: this.textures.void,
+      [CellType.SNAKE]: this.textures.snake,
+      [CellType.DOOR]: this.textures.door,
+      [CellType.ENERGY]: this.textures.energy,
     }
 
-    graphics.fill({ color: colors[cellType] ?? 0x374151 }).rect(0, 0, this.cellSize, this.cellSize).fill()
-    graphics.stroke({ color: 0x6b7280, width: 1 }).rect(0, 0, this.cellSize, this.cellSize).stroke()
+    const tex = texMap[cellType]
+    if (tex) {
+      const sprite = new Sprite(tex)
+      sprite.width = this.cellSize
+      sprite.height = this.cellSize
+      container.addChild(sprite)
+    } else {
+      const g = new Graphics()
+      g.fill({ color: 0x374151 }).rect(0, 0, this.cellSize, this.cellSize).fill()
+      container.addChild(g)
+    }
 
-    return graphics
+    // Borde sobre la textura
+    const border = new Graphics()
+    border.stroke({ color: 0x6b7280, width: 1 }).rect(0, 0, this.cellSize, this.cellSize).stroke()
+    container.addChild(border)
+
+    return container
   }
 
   public async loadLevel(level: GameLevel): Promise<void> {
@@ -674,6 +721,10 @@ export class GameEngine {
     }
 
     void this.ensureSpineNinja()
+    // Asegurar texturas antes de construir el grid
+    if (!this.textures.grass) {
+      await this.loadTextures()
+    }
 
     if (!this.pixiApp) {
       console.error('Renderer no disponible al cargar nivel')
@@ -696,8 +747,8 @@ export class GameEngine {
         cellSprite.x = x * this.cellSize
         cellSprite.y = y * this.cellSize
 
-        if (cell.type === CellType.ENERGY) {
-          this.addEnergyGlow(cellSprite)
+        if (cell.type === CellType.ENERGY && cellSprite instanceof Graphics) {
+          this.addEnergyGlow(cellSprite as Graphics)
         }
 
         gridContainer.addChild(cellSprite)
@@ -747,11 +798,27 @@ export class GameEngine {
 
     overlay.stroke()
 
-    // Dibujar flecha en la punta
+    // Dibujar flecha en la punta directamente en el mismo Graphics (sin addChild)
     const lastPoint = this.cellCenter(path[path.length - 1])
     const prevPoint = this.cellCenter(path[path.length - 2])
-    const arrow = this.createArrow(lastPoint, prevPoint)
-    overlay.addChild(arrow)
+    const dx = lastPoint.x - prevPoint.x
+    const dy = lastPoint.y - prevPoint.y
+    const len = Math.hypot(dx, dy) || 1
+    const nx = dx / len
+    const ny = dy / len
+    const arrowLength = this.cellSize * 0.5
+    const arrowWidth = this.cellSize * 0.4
+    const baseX = lastPoint.x - nx * arrowLength
+    const baseY = lastPoint.y - ny * arrowLength
+    const leftX = baseX + (-ny) * (arrowWidth / 2)
+    const leftY = baseY + nx * (arrowWidth / 2)
+    const rightX = baseX - (-ny) * (arrowWidth / 2)
+    const rightY = baseY - nx * (arrowWidth / 2)
+    overlay.fill({ color: 0xfbbf24, alpha: 0.9 })
+      .moveTo(lastPoint.x, lastPoint.y)
+      .lineTo(leftX, leftY)
+      .lineTo(rightX, rightY)
+      .fill()
 
     overlay.visible = this.guideVisible
     overlay.zIndex = 10

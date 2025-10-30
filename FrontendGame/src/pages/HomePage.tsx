@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
-import { Play, Trophy, Settings, Info, BookOpen, Gamepad2 } from 'lucide-react'
+import { Play, Trophy, Settings, Info, BookOpen, Gamepad2, Lock, Sword } from 'lucide-react'
+import nivelesBg from '@/assets/images/backgrounds/fondo-niveles.png'
+import katanaImg from '@/assets/images/icons/katanas.png'
 import { useState, useEffect } from 'react'
 import { StorySequence } from '../components/StorySequence'
 import logo from '@/assets/images/icons/logo.png'
@@ -150,42 +152,69 @@ export default function HomePage() {
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setShowLevels(false)}
             ></div>
-            <div className="relative z-10 w-full max-w-xl mx-4 bg-black/40 border border-white/10 rounded-xl p-6 font-stick">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl sm:text-2xl font-semibold text-white">15 Niveles de Desafío</h2>
-                <button 
-                  onClick={() => setShowLevels(false)}
-                  className="text-white/80 hover:text-white transition-colors px-3 py-1 rounded"
-                >
-                  Cerrar
-                </button>
-              </div>
-              <div className="grid grid-cols-5 gap-2 max-w-md mx-auto">
-                {Array.from({ length: 15 }, (_, i) => (
-                  <div 
-                    key={i + 1}
-                    className={`
-                      w-12 h-12 rounded-lg flex items-center justify-center font-bold font-stick
-                      ${i < 5 ? 'bg-green-600' : i < 10 ? 'bg-yellow-600' : 'bg-red-600'}
-                      text-white text-sm
-                    `}
+            <div
+              className="relative z-10 w-full max-w-4xl mx-4 border border-white/10 rounded-3xl p-10 font-stick overflow-hidden"
+              style={{
+                backgroundImage: `url(${nivelesBg})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            >
+              <div className="absolute inset-0 bg-black/50" />
+              <div className="relative">
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-3xl sm:text-4xl font-semibold text-white">15 Niveles de Desafío</h2>
+                  <button 
+                    onClick={() => setShowLevels(false)}
+                    className="text-white/80 hover:text-white transition-colors px-5 py-2.5 rounded-lg"
                   >
-                    {i + 1}
+                    Cerrar
+                  </button>
+                </div>
+                <div className="grid grid-cols-5 gap-4 max-w-2xl mx-auto">
+                  {Array.from({ length: 15 }, (_, i) => {
+                    const levelNum = i + 1
+                    const isUnlocked = levelNum === 1
+                    if (isUnlocked) {
+                      return (
+                        <Link
+                          key={levelNum}
+                          to="/game"
+                          className="w-20 h-20 rounded-2xl flex items-center justify-center font-bold font-stick bg-green-600 hover:bg-green-700 text-white text-lg transition-colors"
+                          title="Jugar nivel 1"
+                        >
+                          {levelNum}
+                        </Link>
+                      )
+                    }
+                    return (
+                      <div
+                        key={levelNum}
+                        className="w-20 h-20 rounded-2xl relative flex items-center justify-center font-bold font-stick bg-gray-700/70 text-white/70 text-lg cursor-not-allowed select-none border border-white/10"
+                        title="Bloqueado"
+                        aria-label={`Nivel ${levelNum} bloqueado`}
+                      >
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+                          <img src={katanaImg} alt="katanas" aria-hidden className="w-12 h-12 sm:w-14 sm:h-14 opacity-90" />
+                        </div>
+                        {levelNum}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="flex justify-center gap-12 mt-8 text-base sm:text-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 bg-green-600 rounded"></div>
+                    <span className="text-gray-300">Fácil (1-5)</span>
                   </div>
-                ))}
-              </div>
-              <div className="flex justify-center gap-8 mt-4 text-xs sm:text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-green-600 rounded"></div>
-                  <span className="text-gray-300">Fácil (1-5)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-yellow-600 rounded"></div>
-                  <span className="text-gray-300">Medio (6-10)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-red-600 rounded"></div>
-                  <span className="text-gray-300">Difícil (11-15)</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 bg-yellow-600 rounded"></div>
+                    <span className="text-gray-300">Medio (6-10)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 bg-red-600 rounded"></div>
+                    <span className="text-gray-300">Difícil (11-15)</span>
+                  </div>
                 </div>
               </div>
             </div>

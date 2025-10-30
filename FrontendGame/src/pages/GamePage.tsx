@@ -244,7 +244,7 @@ export default function GamePage() {
                 <div
                   ref={canvasContainerRef}
                   className="border border-gray-600 rounded-lg"
-                  style={{ width: '480px', height: '480px' }}
+                  style={{ width: '720px', height: '720px' }}
                 />
               </div>
             </div>
