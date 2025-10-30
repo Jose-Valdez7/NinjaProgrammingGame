@@ -26,8 +26,10 @@ front-thigh
 	rotate: 90
 front-upper-arm
 	bounds: 250, 205, 23, 49
+	rotate: 180
 goggles
 	bounds: 665, 171, 131, 83
+	rotate:90
 gun
 	bounds: 798, 152, 105, 102
 head

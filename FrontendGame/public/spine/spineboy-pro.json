@@ -171,9 +171,10 @@
 		"name": "gun",
 		"parent": "rear-bracer",
 		"length": 43.11,
-		"rotation": -5.43,
+		"rotation": 65.43,
 		"x": 34.42,
 		"y": -0.45,
+		"scaleY": -1,
 		"color": "ff000dff"
 	},
 	{ "name": "gun-tip", "parent": "gun", "rotation": 7.1, "x": 200.78, "y": 52.5, "color": "ff0000ff" },
