@@ -8,21 +8,22 @@ import image3 from '@/assets/images/history/3.png';
 import image5 from '@/assets/images/history/5.png';
 import image6 from '@/assets/images/history/6.png';
 import image7 from '@/assets/images/history/7.png';
+import fondo from '@/assets/images/backgrounds/fondo.png';
 
 const storyImages = [image1, image2, image3, image5, image6, image7];
 
 const storyParts = [
-  "Había una vez un joven programador llamado Debian, Debian era un apasionado por los ninjas y le gustaba imaginar que era uno, un dia se propuso a hacer un juego hiperrealista, como Debian sabia programar no le tardo mas de unos 2 meses.",
+  "Había una vez un joven programador llamado Jason, Jason era un apasionado por los ninjas y le gustaba imaginar que era uno, un dia se propuso a hacer un juego hiperrealista, como Jason sabia programar no le tardo mas de unos 2 meses.",
   "En cuanto probo el juego se dio cuenta que al momento de la ejecucion, tenia muchos bugs y errores, entonces se le ocurrio la maravillosa idea de entrar dentro del codigo.",
-  "El hace varios meses atras estaba programando un juego con realidad aumentada utilizando las gafas de realidad virtual, cuando Debian entro al codigo vio los errores mas facil y los corrigio sin ningun problema.",
+  "El hace varios meses atras estaba programando un juego con realidad aumentada utilizando las gafas de realidad virtual, cuando Jason entro al codigo vio los errores mas facil y los corrigio sin ningun problema.",
   "Al momento de ejecutarlo se olvido que seguia con las gafas de realidad virtual puestas y lo ejecuto, vio que no habia ningun error y se propuso en probarlo al otro día.",
-  "Pero ¡Oh, sorpresa!, no podia salir del juego hasta que lo complete, aunque se veía un escenario espantoso, Debian estaba feliz ya que porfin cumpliria su sueño de ser ninja, pero el no sabia lo que le esperaba... En cuanto empezo el primer nivel no se podía mover, ya que necesitaba que alguien mas lo ayude.",
-  "Entonces llamo a su mejor amigo de Internet MICHIHACKER, juntos deberan completar el juego para que Debian vuelva a la vida real."
+  "Pero ¡Oh, sorpresa!, no podia salir del juego hasta que lo complete, aunque se veía un escenario espantoso, Jason estaba feliz ya que porfin cumpliria su sueño de ser ninja, pero el no sabia lo que le esperaba... En cuanto empezo el primer nivel no se podía mover, ya que necesitaba que alguien mas lo ayude.",
+  "Entonces llamo a su mejor amigo de Internet MICHIHACKER, juntos deberan completar el juego para que Jason vuelva a la vida real."
 ];
 
 const fullStory = `NINJA 404
 
-Había una vez un joven programador llamado Debian, Debian era un apasionado por los ninjas y le gustaba imaginar que es un ninja, un dia se propuso a hacer un juego hiperrealista, como Debian sabia programar no le tardo mas de unos 2 meses, en cuanto probo el juego se dio cuenta que al momento de la ejecucion, tenia muchos bugs y errores, entonces se le ocurrio la maravillosa idea de entrar dentro del codigo, el hace varios meses atras estaba programando un juego con realidad aumentada utilizando las gafas de realidad virtual, cuando Debian entro al codigo vio los errores mas facil y los corrigio sin ningun problema, al momento de ejecutarlo se olvido que seguia con las gafas de realidad virtual puestas y lo ejecuto, vio que no habia ningun error y se propuso en probarlo al otro día, pero ¡Oh, sorpresa!, no podia salir del juego hasta que lo complete, aunque se veía un escenario espantoso, Debian estaba feliz ya que porfin cumpliria su sueño de ser ninja, pero el no sabia lo que le esperaba... En cuanto empezo el primer nivel no se podía mover, ya que necesitaba que alguien mas lo ayude, entonces llamo a su mejor amigo de Internet MICHIHACKER, juntos deberan completar el juego para que Debian vuelva a la vida real.`;
+Había una vez un joven programador llamado Jason, Jason era un apasionado por los ninjas y le gustaba imaginar que es un ninja, un dia se propuso a hacer un juego hiperrealista, como Jason sabia programar no le tardo mas de unos 2 meses, en cuanto probo el juego se dio cuenta que al momento de la ejecucion, tenia muchos bugs y errores, entonces se le ocurrio la maravillosa idea de entrar dentro del codigo, el hace varios meses atras estaba programando un juego con realidad aumentada utilizando las gafas de realidad virtual, cuando Jason entro al codigo vio los errores mas facil y los corrigio sin ningun problema, al momento de ejecutarlo se olvido que seguia con las gafas de realidad virtual puestas y lo ejecuto, vio que no habia ningun error y se propuso en probarlo al otro día, pero ¡Oh, sorpresa!, no podia salir del juego hasta que lo complete, aunque se veía un escenario espantoso, Jason estaba feliz ya que porfin cumpliria su sueño de ser ninja, pero el no sabia lo que le esperaba... En cuanto empezo el primer nivel no se podía mover, ya que necesitaba que alguien mas lo ayude, entonces llamo a su mejor amigo de Internet MICHIHACKER, juntos deberan completar el juego para que Jason vuelva a la vida real.`;
 
 interface StorySequenceProps {
   onComplete?: () => void;
@@ -127,7 +128,16 @@ export const StorySequence: React.FC<StorySequenceProps> = ({ onComplete, autoSt
 
   if (showFullStory) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 background-overlay">
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{
+          backgroundImage: `url(${fondo})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundAttachment: 'fixed'
+        }}
+      >
         <div className="bg-black/90 backdrop-blur-sm rounded-2xl p-8 max-w-4xl w-full border border-purple-500/30 animate-fadeIn">
           <div className="text-center mb-6">
             <h1 className="text-4xl font-bold text-white mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent animate-pulse">
@@ -164,7 +174,16 @@ export const StorySequence: React.FC<StorySequenceProps> = ({ onComplete, autoSt
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden background-overlay">
+    <div 
+      className="fixed inset-0 z-50 overflow-hidden"
+      style={{
+        backgroundImage: `url(${fondo})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed'
+      }}
+    >
       {/* Background Animation */}
       <div className="absolute inset-0 bg-black/20"></div>
       <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-blue-500/10 animate-pulse"></div>
