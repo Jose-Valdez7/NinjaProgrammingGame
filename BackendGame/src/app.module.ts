@@ -4,6 +4,7 @@ import { PrismaModule } from './shared/database/prisma.module';
 import { AuthModule } from './shared/auth/auth.module';
 import { RankingModule } from './user/ranking/ranking.module';
 import { UserModule } from './admin/user/user.module';
+import { PointsModule } from './user/points/points.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { UserModule } from './admin/user/user.module';
     AuthModule,
     RankingModule,
     UserModule,
+    PointsModule,
   ],
 })
 export class AppModule {}
