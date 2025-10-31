@@ -35,6 +35,13 @@ export default function GamePage() {
   const [showCompletedModal, setShowCompletedModal] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
 
+  useEffect(() => {
+    if (sessionStorage.getItem('forceGameReload') === 'true') {
+      sessionStorage.removeItem('forceGameReload')
+      window.location.reload()
+    }
+  }, [])
+
   const stopTimer = useCallback(() => {
     if (timerRef.current !== null) {
       window.clearInterval(timerRef.current)
