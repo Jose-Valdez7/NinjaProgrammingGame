@@ -24,6 +24,7 @@ export default function GamePage() {
   const [currentLevel, setCurrentLevel] = useState(1)
   const [level, setLevel] = useState<any>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
+  const [showSnakeGameOver, setShowSnakeGameOver] = useState(false)
 
   const stopTimer = useCallback(() => {
     if (timerRef.current !== null) {
