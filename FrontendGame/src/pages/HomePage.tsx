@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { Play, Trophy, Settings, Info, BookOpen, Gamepad2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { useGameStore } from '../store/GameStore'
+import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
 import { StorySequence } from '../components/StorySequence'
 import logo from '@/assets/images/icons/logo.png'
 import fondo from '@/assets/images/backgrounds/fondo.png'
@@ -11,6 +13,11 @@ export default function HomePage() {
   const [isLoadingStory, setIsLoadingStory] = useState(false);
   const [showLevels, setShowLevels] = useState(false);
   const [showHowTo, setShowHowTo] = useState(false);
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const [maxLevelCompleted, setMaxLevelCompleted] = useState<number>(0);
+
+  const { currentUser } = useGameStore();
 
   useEffect(() => {
     // Verificar si el usuario ya vio la historia en esta sesión
@@ -40,6 +47,50 @@ export default function HomePage() {
       setIsLoadingStory(false);
     }, 1000);
   };
+
+  useEffect(() => {
+    const fetchUserProgress = async () => {
+      const token = authStorage.getAccessToken();
+
+      if (!currentUser || !token) {
+        setMaxLevelCompleted(0);
+        setIsLoadingProgress(false);
+        setProgressError(currentUser ? 'No se encontró un token activo. Inicia sesión nuevamente.' : null);
+        return;
+      }
+
+      setIsLoadingProgress(true);
+      setProgressError(null);
+
+      try {
+        const response = await fetch(apiUrl('api/user/progress'), {
+          headers: getAuthHeaders(),
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            setProgressError('Tu sesión expiró. Por favor, vuelve a iniciar sesión.');
+            setMaxLevelCompleted(0);
+            return;
+          }
+          const text = await response.text();
+          throw new Error(text || 'Error al obtener el progreso');
+        }
+
+        const data = await response.json();
+        setMaxLevelCompleted(Number(data?.maxLevelCompleted ?? 0));
+      } catch (error: any) {
+        setProgressError(error?.message || 'No se pudo cargar el progreso');
+        setMaxLevelCompleted(0);
+      } finally {
+        setIsLoadingProgress(false);
+      }
+    };
+
+    if (showLevels) {
+      fetchUserProgress();
+    }
+  }, [showLevels, currentUser]);
 
   if (showStory) {
     return <StorySequence onComplete={handleStoryComplete} autoStart={true} />;
@@ -161,19 +212,37 @@ export default function HomePage() {
                 </button>
               </div>
               <div className="grid grid-cols-5 gap-2 max-w-md mx-auto">
-                {Array.from({ length: 15 }, (_, i) => (
-                  <div 
-                    key={i + 1}
-                    className={`
-                      w-12 h-12 rounded-lg flex items-center justify-center font-bold font-stick
-                      ${i < 5 ? 'bg-green-600' : i < 10 ? 'bg-yellow-600' : 'bg-red-600'}
-                      text-white text-sm
-                    `}
-                  >
-                    {i + 1}
-                  </div>
-                ))}
+                {Array.from({ length: 15 }, (_, i) => {
+                  const levelNumber = i + 1
+                  const isCompleted = levelNumber <= maxLevelCompleted
+                  const difficultyClass = i < 5 ? 'bg-green-600' : i < 10 ? 'bg-yellow-600' : 'bg-red-600'
+                  const completedClasses = 'bg-gray-600 text-gray-200 border border-white/20 ring-2 ring-white/10 shadow-inner'
+
+                  return (
+                    <div 
+                      key={levelNumber}
+                      className={`
+                        w-12 h-12 rounded-lg flex items-center justify-center font-bold font-stick text-sm transition-all duration-300
+                        ${isCompleted ? completedClasses : `${difficultyClass} text-white`}
+                      `}
+                    >
+                      {levelNumber}
+                    </div>
+                  )
+                })}
               </div>
+              {isLoadingProgress && (
+                <p className="text-sm text-gray-300 mt-4">Cargando progreso...</p>
+              )}
+              {!isLoadingProgress && progressError && (
+                <p className="text-sm text-red-400 mt-4">{progressError}</p>
+              )}
+              {!isLoadingProgress && !progressError && currentUser && (
+                <p className="text-sm text-gray-300 mt-4">Niveles completados: {maxLevelCompleted}</p>
+              )}
+              {!currentUser && (
+                <p className="text-sm text-gray-300 mt-4">Inicia sesión para guardar tu progreso.</p>
+              )}
               <div className="flex justify-center gap-8 mt-4 text-xs sm:text-sm">
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 bg-green-600 rounded"></div>

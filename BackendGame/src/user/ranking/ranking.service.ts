@@ -34,13 +34,17 @@ export class RankingService {
 
       // Crear un mapa de userId -> mejor nivel
       const userBestLevels = new Map<string, number>();
-      bestUserRecords.forEach((record) => {
+      bestUserRecords.forEach(record => {
         userBestLevels.set(record.userId, record._max.level ?? 0);
       });
 
       // Obtener todos los registros de los mejores niveles de cada usuario
       const allBestRecords = await this.prisma.ranking.findMany({
-        where: { userId: { in: Array.from(userBestLevels.keys()) } },
+        where: {
+          userId: {
+            in: Array.from(userBestLevels.keys()),
+          },
+        },
         include: {
           user: {
             select: {
@@ -56,17 +60,27 @@ export class RankingService {
       });
 
       // Filtrar solo los registros del mejor nivel de cada usuario
-      const filteredRecords = allBestRecords.filter((record) => {
+      const filteredRecords = allBestRecords.filter(record => {
         const userBestLevel = userBestLevels.get(record.userId) ?? 0;
         return record.level === userBestLevel;
       });
 
-      // Ordenar por el score del usuario, luego comandos y tiempo
+      // Ordenar por nivel, score del usuario, comandos y tiempo
       filteredRecords.sort((a, b) => {
-        if (b.level !== a.level) return b.level - a.level;
-        if ((b.user?.score ?? 0) !== (a.user?.score ?? 0))
-          return (b.user?.score ?? 0) - (a.user?.score ?? 0);
-        if (a.commandsUsed !== b.commandsUsed) return a.commandsUsed - b.commandsUsed;
+        if (b.level !== a.level) {
+          return b.level - a.level;
+        }
+
+        const aScore = a.user?.score ?? 0;
+        const bScore = b.user?.score ?? 0;
+        if (bScore !== aScore) {
+          return bScore - aScore;
+        }
+
+        if (a.commandsUsed !== b.commandsUsed) {
+          return a.commandsUsed - b.commandsUsed;
+        }
+
         return a.timeTaken - b.timeTaken;
       });
 
@@ -74,7 +88,7 @@ export class RankingService {
       const paginatedRecords = filteredRecords.slice(skip, skip + limit);
       const totalPages = Math.max(1, Math.ceil(total / limit));
 
-      const mappedItems = paginatedRecords.map((r) => ({
+      const mappedItems = paginatedRecords.map(r => ({
         level: r.level,
         userId: r.userId,
         firstName: r.user?.firstName ?? '',

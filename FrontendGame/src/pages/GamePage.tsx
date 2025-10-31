@@ -4,11 +4,18 @@ import { GameEngine } from '../game/GameEngine'
 import { LevelGenerator } from '../game/LevelGenerator'
 import { CommandParser } from '../game/CommandParser'
 import { GameLevel } from '../types/game'
-import { Play, RotateCcw, Home, HelpCircle } from 'lucide-react'
+import { Play, RotateCcw, Home, HelpCircle, ListChecks } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { getAuthHeaders, apiUrl, authStorage } from '@/config/env'
+
+const safeTileImg = new URL('../assets/images/backgrounds/secure1.png', import.meta.url).href
+const energyTileImg = new URL('../assets/energy/energy1.png', import.meta.url).href
+const voidTileImg = new URL('../assets/void/void1.png', import.meta.url).href
+const snakeTileImg = new URL('../assets/snake/Snake1.png', import.meta.url).href
+const doorTileImg = new URL('../assets/door/door1.png', import.meta.url).href
 
 export default function GamePage() {
-  const { gameState, currentUser, dispatch } = useGameStore()
+  const { currentUser, dispatch } = useGameStore()
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const gameEngineRef = useRef<GameEngine | null>(null)
   const levelGeneratorRef = useRef(new LevelGenerator())
@@ -22,6 +29,11 @@ export default function GamePage() {
   const [currentLevel, setCurrentLevel] = useState(1)
   const [level, setLevel] = useState<any>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
+  const [energyRemaining, setEnergyRemaining] = useState(0)
+  const [maxLevelCompleted, setMaxLevelCompleted] = useState<number>(0)
+  const [completedLevels, setCompletedLevels] = useState<number[]>([])
+  const [showCompletedModal, setShowCompletedModal] = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
 
   const stopTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -49,6 +61,57 @@ export default function GamePage() {
       stopTimer()
     }
   }, [stopTimer])
+
+  const handleSessionExpired = useCallback(() => {
+    stopTimer()
+    setIsPlaying(false)
+    authStorage.clearAll()
+    dispatch({ type: 'SET_USER', payload: null })
+    setSessionExpired(true)
+    setCompletedLevels([])
+    setMaxLevelCompleted(0)
+    setShowCompletedModal(false)
+    setError('Tu sesión expiró. Por favor, vuelve a iniciar sesión.')
+  }, [dispatch, stopTimer])
+
+  useEffect(() => {
+    const fetchProgress = async () => {
+      if (!currentUser) {
+        setMaxLevelCompleted(0)
+        setCompletedLevels([])
+        return
+      }
+
+      if (sessionExpired) {
+        setSessionExpired(false)
+        setError('')
+      }
+
+      try {
+        const response = await fetch(apiUrl('api/user/progress'), {
+          headers: getAuthHeaders(),
+        })
+
+        if (response.status === 401 || response.status === 403) {
+          handleSessionExpired()
+          return
+        }
+
+        if (!response.ok) {
+          throw new Error('No se pudo obtener el progreso')
+        }
+
+        const data = await response.json()
+        const maxLevel = Number(data?.maxLevelCompleted ?? 0)
+        setMaxLevelCompleted(maxLevel)
+        setCompletedLevels(maxLevel > 0 ? Array.from({ length: maxLevel }, (_, i) => i + 1) : [])
+      } catch (err) {
+        console.warn('Error cargando progreso del usuario:', err)
+      }
+    }
+
+    void fetchProgress()
+  }, [currentUser, handleSessionExpired, sessionExpired])
 
   // 🧩 Inicializar motor Pixi y cargar primer nivel
   useLayoutEffect(() => {
@@ -89,6 +152,9 @@ export default function GamePage() {
     const levelGen = levelGeneratorRef.current
     const newLevel = levelGen.generateLevel(levelNumber)
     setLevel(newLevel)
+    setEnergyRemaining(newLevel.requiredEnergy || 0)
+    setCommands('')
+    setShowHelp(false)
     await gameEngineRef.current?.loadLevel(newLevel)
     gameEngineRef.current?.setGuideVisibility(Boolean(commands.trim()))
     gameEngineRef.current?.debugDump()
@@ -105,6 +171,9 @@ export default function GamePage() {
       setElapsedTime(0)
     }
   }, [commands, dispatch, startTimer, stopTimer])
+
+  // 🔁 Reiniciar nivel
+  const resetLevel = useCallback(() => loadLevel(currentLevel), [currentLevel, loadLevel])
 
   // 🧩 Validar y expandir comandos
   const validateAndParseCommands = () => {
@@ -144,13 +213,15 @@ export default function GamePage() {
     if (!gameEngineRef.current || !commands.trim() || !level) return
 
     try {
+      setEnergyRemaining(level.requiredEnergy || 0)
+      let remainingEnergy = level.requiredEnergy || 0
       const expandedCommands = validateAndParseCommands()
       setIsPlaying(true)
       setError('')
 
       let currentPos = { ...level.startPosition }
-      let isEnergized = false
-      let energyCollected = 0
+      let isEnergized = level.requiredEnergy === 0
+      const collectedEnergyCells = new Set<string>()
 
       for (const command of expandedCommands) {
         for (let step = 0; step < command.steps; step++) {
@@ -194,13 +265,24 @@ export default function GamePage() {
           }
 
           if (cell.type === 'energy') {
-            energyCollected++
+            const cellKey = `${newPos.x},${newPos.y}`
+            if (!collectedEnergyCells.has(cellKey)) {
+              collectedEnergyCells.add(cellKey)
+              remainingEnergy = Math.max(0, remainingEnergy - 1)
+              setEnergyRemaining(remainingEnergy)
+            }
             isEnergized = true
             gameEngineRef.current.animateEnergyCollection()
           }
 
           if (cell.type === 'door') {
-            if (!isEnergized) {
+            if (remainingEnergy > 0) {
+              setError(`¡Aún necesitas recolectar ${remainingEnergy} energías para abrir la puerta!`)
+              setIsPlaying(false)
+              return
+            }
+
+            if (!isEnergized && (level.requiredEnergy || 0) > 0) {
               setError('¡Necesitas energía para pasar por la puerta!')
               setIsPlaying(false)
               return
@@ -209,12 +291,35 @@ export default function GamePage() {
             stopTimer()
             await gameEngineRef.current.animateVictory()
             setError('')
-            if (currentUser) {
-              // TODO: guardar progreso en backend
-            }
 
-            // Si no hay usuario autenticado, mostrar pantalla de login/registro
-            if (!currentUser) {
+            if (currentUser) {
+              const response = await fetch(apiUrl('api/user/progress'), {
+                method: 'POST',
+                headers: {
+                  ...getAuthHeaders(),
+                },
+                body: JSON.stringify({
+                  level: currentLevel,
+                  commandsUsed: level.commandsUsed ?? 0,
+                  timeTaken: elapsedTime,
+                  energized: isEnergized,
+                  success: true,
+                }),
+              })
+
+              if (response.ok) {
+                setCompletedLevels(prev => {
+                  if (prev.includes(currentLevel)) return prev
+                  return [...prev, currentLevel].sort((a, b) => a - b)
+                })
+                setMaxLevelCompleted(prev => Math.max(prev, currentLevel))
+              } else if (response.status === 401 || response.status === 403) {
+                handleSessionExpired()
+                return
+              } else {
+                console.warn('No se pudo registrar el avance del usuario')
+              }
+            } else {
               setTimeout(() => {
                 window.location.href = '/login?next=/game'
               }, 1200)
@@ -244,11 +349,9 @@ export default function GamePage() {
     }
   }
 
-  // 🔁 Reiniciar nivel
-  const resetLevel = useCallback(() => loadLevel(currentLevel), [currentLevel, loadLevel])
-
   const levelInfo = level ? {
-    energyRequired: level.requiredEnergy,
+    energyRequired: energyRemaining,
+    totalEnergy: level.requiredEnergy,
     timeLimit: level.timeLimit,
     hasGuideLines: level.hasGuideLines,
     allowsLoops: level.allowsLoops
@@ -282,6 +385,64 @@ export default function GamePage() {
         </div>
       </div>
 
+      {sessionExpired && (
+        <div className="bg-red-600/80 text-white text-center py-2 px-4">
+          Tu sesión expiró. Se limpió la información guardada, vuelve a iniciar sesión para continuar jugando.
+        </div>
+      )}
+
+      {showCompletedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowCompletedModal(false)}
+          />
+          <div className="relative z-10 w-full max-w-md mx-4 bg-black/60 border border-white/10 rounded-xl p-6 font-stick">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-white">Niveles completados</h2>
+              <button
+                onClick={() => setShowCompletedModal(false)}
+                className="text-white/80 hover:text-white transition-colors px-3 py-1 rounded"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            {completedLevels.length === 0 ? (
+              <p className="text-sm text-gray-300">Aún no has completado ningún nivel.</p>
+            ) : (
+              <div className="grid grid-cols-5 gap-2">
+                {completedLevels.map(levelNumber => (
+                  <button
+                    key={levelNumber}
+                    onClick={() => {
+                      setShowCompletedModal(false)
+                      void loadLevel(levelNumber)
+                    }}
+                    className={`
+                      w-12 h-12 rounded-lg flex items-center justify-center font-bold text-sm
+                      bg-gray-700 text-white border border-white/20 hover:bg-gray-600 transition-colors duration-200
+                    `}
+                  >
+                    {levelNumber}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {completedLevels.length > 0 && (
+              <p className="text-sm text-gray-200 mt-4">
+                Has completado hasta el nivel {maxLevelCompleted}.
+              </p>
+            )}
+
+            <p className="text-xs text-gray-300 mt-4">
+              Selecciona un nivel completado para volver a practicarlo. Solo están disponibles los niveles que ya superaste.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main */}
       <div className="max-w-7xl mx-auto p-6">
         <div className="grid lg:grid-cols-3 gap-6">
@@ -290,20 +451,35 @@ export default function GamePage() {
             <div className="bg-ninja-purple rounded-lg p-6 border border-blue-500/30">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold">Nivel {currentLevel}</h2>
-                <button
-                  onClick={resetLevel}
-                  className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded flex items-center gap-1 text-sm"
-                >
-                  <RotateCcw size={16} />
-                  Reiniciar
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowCompletedModal(true)}
+                    disabled={!currentUser || completedLevels.length === 0}
+                    className={`px-3 py-1 rounded flex items-center gap-1 text-sm border border-blue-400/40
+                      ${!currentUser || completedLevels.length === 0
+                        ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-60'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/30'}
+                    `}
+                  >
+                    <ListChecks size={16} />
+                    Niveles
+                  </button>
+
+                  <button
+                    onClick={resetLevel}
+                    className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded flex items-center gap-1 text-sm"
+                  >
+                    <RotateCcw size={16} />
+                    Reiniciar
+                  </button>
+                </div>
               </div>
 
               <div className="flex justify-center">
                 <div
                   ref={canvasContainerRef}
-                  className="border border-gray-600 rounded-lg"
-                  style={{ width: '480px', height: '480px' }}
+                  className="border-2 border-gray-400 rounded-lg overflow-hidden"
+                  style={{ width: '718px', height: '718px' }}
                 />
               </div>
             </div>
@@ -329,7 +505,12 @@ export default function GamePage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2 text-amber-300">
                     <span role="img" aria-label="energy">⚡</span>
-                    <span>Energía requerida: <span className="font-semibold text-white">{levelInfo.energyRequired}</span></span>
+                    <span>
+                      Energía restante: <span className="font-semibold text-white">{levelInfo.energyRequired}</span>
+                      {typeof levelInfo.totalEnergy === 'number' && (
+                        <span className="text-sm text-amber-200"> / {levelInfo.totalEnergy}</span>
+                      )}
+                    </span>
                   </div>
                   {levelInfo.timeLimit && (
                     <div className="flex items-center gap-2 text-blue-200">
@@ -397,13 +578,27 @@ export default function GamePage() {
             {/* Legend */}
             <div className="bg-ninja-purple rounded-lg p-4 border border-blue-500/30">
               <h3 className="font-semibold mb-3">Leyenda</h3>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-center gap-2"><div className="w-4 h-4 bg-green-500 rounded"></div><span>Seguro</span></div>
-                <div className="flex items-center gap-2"><div className="w-4 h-4 bg-yellow-400 rounded"></div><span>Energía</span></div>
-                <div className="flex items-center gap-2"><div className="w-4 h-4 bg-black rounded border border-gray-600"></div><span>Vacío</span></div>
-                <div className="flex items-center gap-2"><div className="w-4 h-4 bg-red-600 rounded"></div><span>Serpiente</span></div>
-                <div className="flex items-center gap-2"><div className="w-4 h-4 bg-blue-600 rounded"></div><span>Puerta</span></div>
-                <div className="flex items-center gap-2"><div className="w-4 h-4 bg-indigo-600 rounded-full"></div><span>Ninja</span></div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <img src={safeTileImg} alt="Seguro" className="w-6 h-6 rounded-sm border border-blue-500/30" />
+                  <span>Seguro</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <img src={energyTileImg} alt="Energía" className="w-6 h-6 rounded-sm border border-blue-500/30" />
+                  <span>Energía</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <img src={voidTileImg} alt="Vacío" className="w-6 h-6 rounded-sm border border-blue-500/30 bg-black object-cover" />
+                  <span>Vacío</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <img src={snakeTileImg} alt="Serpiente" className="w-6 h-6 rounded-sm border border-blue-500/30" />
+                  <span>Serpiente</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <img src={doorTileImg} alt="Puerta" className="w-6 h-6 rounded-sm border border-blue-500/30" />
+                  <span>Puerta</span>
+                </div>
               </div>
             </div>
           </div>

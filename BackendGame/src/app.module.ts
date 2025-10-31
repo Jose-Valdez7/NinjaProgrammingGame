@@ -5,6 +5,7 @@ import { AuthModule } from './shared/auth/auth.module';
 import { RankingModule } from './user/ranking/ranking.module';
 import { UserModule } from './admin/user/user.module';
 import { PointsModule } from './user/points/points.module';
+import { UserProgressModule } from './user/progress/progress.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { PointsModule } from './user/points/points.module';
     RankingModule,
     UserModule,
     PointsModule,
+    UserProgressModule,
   ],
 })
 export class AppModule {}
