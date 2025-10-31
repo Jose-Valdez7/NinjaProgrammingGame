@@ -1,14 +1,16 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { Home, Users, BarChart3, Settings, Shield } from 'lucide-react'
+import { Users, BarChart3, Settings, Shield } from 'lucide-react'
 import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
-import { useGameStore } from '../store/GameStore'
+ 
 
 export default function AdminPage() {
+  type AdminUser = { id: string | number; firstName?: string; lastName?: string; email?: string }
+  type PaginationMeta = { totalItems: number; totalPages: number; currentPage: number }
   const navigate = useNavigate()
-  const { dispatch } = useGameStore()
-  const [users, setUsers] = useState<any[]>([])
-  const [meta, setMeta] = useState<any>(null)
+  
+  const [users, setUsers] = useState<AdminUser[]>([])
+  const [meta, setMeta] = useState<PaginationMeta | null>(null)
   const [page, setPage] = useState(1)
   const [limit] = useState(10)
   const [loading, setLoading] = useState(false)
@@ -34,18 +36,29 @@ export default function AdminPage() {
         const text = await res.text()
         throw new Error(text || `Error ${res.status}`)
       }
-      const data = await res.json()
-      // data esperado: { items, meta }
-      setUsers(Array.isArray(data?.items) ? data.items : [])
-      setMeta(data?.meta ?? null)
-    } catch (e: any) {
-      setError(e?.message || 'Error cargando usuarios')
+      const data: unknown = await res.json()
+      const parsed = data as { items?: AdminUser[]; meta?: PaginationMeta }
+      const items = parsed.items
+      const metaObj = parsed.meta
+      setUsers(Array.isArray(items) ? items : [])
+      setMeta(metaObj ?? null)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Error cargando usuarios'
+      setError(msg)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
+    // Si no hay token o el usuario no es ADMIN, mostrar modal y no intentar cargar
+    const token = authStorage.getAccessToken()
+    const user = authStorage.getCurrentUser() as { role?: string } | null
+    if (!token || !user || user.role !== 'ADMIN') {
+      setShowAdminModal(true)
+      return
+    }
+
     fetchUsers(page)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page])
@@ -110,11 +123,11 @@ export default function AdminPage() {
         throw new Error(errorMsg)
       }
 
-      const json = await res.json()
-      const data = json?.data || {}
-      const accessToken = data?.accessToken
-      const refreshToken = data?.refreshToken
-      const adminUser = data?.user
+      const json: unknown = await res.json()
+      const parsed = json as { data?: { accessToken?: string; refreshToken?: string; user?: unknown } }
+      const accessToken = parsed.data?.accessToken
+      const refreshToken = parsed.data?.refreshToken
+      const adminUser = parsed.data?.user as unknown
       if (!accessToken || !adminUser) throw new Error('Respuesta de admin inválida')
 
       // Limpiar credenciales de usuario y establecer las de admin
@@ -122,7 +135,6 @@ export default function AdminPage() {
       authStorage.setAccessToken(accessToken)
       if (refreshToken) authStorage.setRefreshToken(refreshToken)
       authStorage.setCurrentUser(adminUser)
-      dispatch({ type: 'SET_USER', payload: adminUser })
 
       setShowAdminModal(false)
       setAdminEmail('')
@@ -130,8 +142,9 @@ export default function AdminPage() {
 
       // Refrescar datos ahora con token admin
       fetchUsers(page)
-    } catch (err: any) {
-      setAdminError(err?.message || 'Error al iniciar sesión como admin')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al iniciar sesión como admin'
+      setAdminError(msg)
     } finally {
       setAdminLoading(false)
     }
@@ -139,26 +152,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-ninja-dark text-white">
-      <div className="bg-ninja-purple border-b border-blue-500/30 p-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2 text-blue-400 hover:text-blue-300">
-              <Home size={20} />
-              Inicio
-            </Link>
-            <h1 className="text-xl font-bold">Panel de Administración</h1>
-          </div>
-          <div>
-            <button
-              className="px-3 py-1 rounded border border-blue-500/40 text-blue-300 hover:bg-blue-500/10 inline-flex items-center gap-2"
-              onClick={() => setShowAdminModal(true)}
-            >
-              <Shield size={16} /> Acceder como Admin
-            </button>
-          </div>
-        </div>
-      </div>
-
       <div className="max-w-7xl mx-auto p-6">
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <div className="bg-ninja-purple rounded-lg p-6 border border-blue-500/30">

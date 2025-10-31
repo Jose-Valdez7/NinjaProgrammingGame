@@ -13,7 +13,15 @@ export class PointsService {
         
         const updatedUser = await this.prisma.user.update({
             where: { id: userId },
-            data: { score: user.score + points },
+            data: {
+                score: {
+                    increment: points,
+                },
+            },
+            select: {
+                id: true,
+                score: true,
+            },
         });
         
         return updatedUser;

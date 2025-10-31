@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
-import { Play, Trophy, Settings, Info, BookOpen, Gamepad2, Lock, Sword } from 'lucide-react'
+import { Play, Trophy, Settings, Info, BookOpen, Gamepad2 } from 'lucide-react'
 import nivelesBg from '@/assets/images/backgrounds/fondo-niveles.png'
 import katanaImg from '@/assets/images/icons/katanas.png'
 import { useState, useEffect } from 'react'
+import { useGameStore } from '../store/GameStore'
+import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
 import { StorySequence } from '../components/StorySequence'
 import logo from '@/assets/images/icons/logo.png'
 import fondo from '@/assets/images/backgrounds/fondo.png'
@@ -13,6 +15,11 @@ export default function HomePage() {
   const [isLoadingStory, setIsLoadingStory] = useState(false);
   const [showLevels, setShowLevels] = useState(false);
   const [showHowTo, setShowHowTo] = useState(false);
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const [maxLevelCompleted, setMaxLevelCompleted] = useState<number>(0);
+
+  const { currentUser } = useGameStore();
 
   useEffect(() => {
     // Verificar si el usuario ya vio la historia en esta sesión
@@ -42,6 +49,50 @@ export default function HomePage() {
       setIsLoadingStory(false);
     }, 1000);
   };
+
+  useEffect(() => {
+    const fetchUserProgress = async () => {
+      const token = authStorage.getAccessToken();
+
+      if (!currentUser || !token) {
+        setMaxLevelCompleted(0);
+        setIsLoadingProgress(false);
+        setProgressError(currentUser ? 'No se encontró un token activo. Inicia sesión nuevamente.' : null);
+        return;
+      }
+
+      setIsLoadingProgress(true);
+      setProgressError(null);
+
+      try {
+        const response = await fetch(apiUrl('api/user/progress'), {
+          headers: getAuthHeaders(),
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            setProgressError('Tu sesión expiró. Por favor, vuelve a iniciar sesión.');
+            setMaxLevelCompleted(0);
+            return;
+          }
+          const text = await response.text();
+          throw new Error(text || 'Error al obtener el progreso');
+        }
+
+        const data = await response.json();
+        setMaxLevelCompleted(Number(data?.maxLevelCompleted ?? 0));
+      } catch (error: any) {
+        setProgressError(error?.message || 'No se pudo cargar el progreso');
+        setMaxLevelCompleted(0);
+      } finally {
+        setIsLoadingProgress(false);
+      }
+    };
+
+    if (showLevels) {
+      fetchUserProgress();
+    }
+  }, [showLevels, currentUser]);
 
   if (showStory) {
     return <StorySequence onComplete={handleStoryComplete} autoStart={true} />;
@@ -174,14 +225,21 @@ export default function HomePage() {
                 <div className="grid grid-cols-5 gap-6 max-w-4xl mx-auto">
                   {Array.from({ length: 15 }, (_, i) => {
                     const levelNum = i + 1
-                    const isUnlocked = levelNum === 1
+                    // Si no hay progreso (0), solo el nivel 1 está desbloqueado
+                    // Si hay progreso, los niveles hasta maxLevelCompleted + 1 están desbloqueados
+                    const isUnlocked = maxLevelCompleted === 0 ? levelNum === 1 : levelNum <= maxLevelCompleted + 1
+                    const isCompleted = levelNum <= maxLevelCompleted
+                    const difficultyClass = i < 5 ? 'bg-green-600 hover:bg-green-700' : i < 10 ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-red-600 hover:bg-red-700'
+                    
                     if (isUnlocked) {
                       return (
                         <Link
                           key={levelNum}
                           to="/game"
-                          className="w-24 h-24 rounded-3xl flex items-center justify-center font-bold font-stick bg-green-600 hover:bg-green-700 text-white text-xl transition-colors"
-                          title="Jugar nivel 1"
+                          className={`w-24 h-24 rounded-3xl flex items-center justify-center font-bold font-stick text-white text-xl transition-colors ${
+                            isCompleted ? 'bg-gray-600 border-2 border-white/30 ring-2 ring-white/20' : difficultyClass
+                          }`}
+                          title={isCompleted ? `Nivel ${levelNum} completado` : `Jugar nivel ${levelNum}`}
                         >
                           {levelNum}
                         </Link>
@@ -202,6 +260,19 @@ export default function HomePage() {
                     )
                   })}
                 </div>
+                {isLoadingProgress && (
+                  <p className="text-center text-lg text-gray-300 mt-6">Cargando progreso...</p>
+                )}
+                {!isLoadingProgress && progressError && (
+                  <p className="text-center text-lg text-red-400 mt-6">{progressError}</p>
+                )}
+                {!isLoadingProgress && !progressError && currentUser && (
+                  <p className="text-center text-lg text-gray-300 mt-6">Niveles completados: {maxLevelCompleted}</p>
+                )}
+                {!currentUser && (
+                  <p className="text-center text-lg text-gray-300 mt-6">Inicia sesión para guardar tu progreso.</p>
+                )}
+                <div className="border-t border-white/10 my-8"></div>
                 <div className="flex justify-center gap-14 mt-10 text-lg sm:text-xl">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 bg-green-600 rounded"></div>

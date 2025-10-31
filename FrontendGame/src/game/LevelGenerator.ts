@@ -16,11 +16,11 @@ interface PatternTemplate {
 }
 
 export class LevelGenerator {
-  private gridSize = 15
+  private gridSize = 12
   private patternTemplates: PatternTemplate[] = [
     {
       name: 'stair-right',
-      start: { x: 1, y: 13 },
+      start: { x: 1, y: 10 },
       pattern: [
         { direction: 'D', steps: 2 },
         { direction: 'S', steps: 1 },
@@ -30,7 +30,7 @@ export class LevelGenerator {
     },
     {
       name: 'stair-left',
-      start: { x: 13, y: 13 },
+      start: { x: 10, y: 10 },
       pattern: [
         { direction: 'I', steps: 2 },
         { direction: 'S', steps: 1 },
@@ -40,7 +40,7 @@ export class LevelGenerator {
     },
     {
       name: 'zigzag-right',
-      start: { x: 2, y: 13 },
+      start: { x: 2, y: 10 },
       pattern: [
         { direction: 'S', steps: 2 },
         { direction: 'D', steps: 1 },
@@ -50,7 +50,7 @@ export class LevelGenerator {
     },
     {
       name: 'zigzag-left',
-      start: { x: 12, y: 13 },
+      start: { x: 9, y: 10 },
       pattern: [
         { direction: 'S', steps: 2 },
         { direction: 'I', steps: 1 },
@@ -60,7 +60,7 @@ export class LevelGenerator {
     },
     {
       name: 'ladder',
-      start: { x: 7, y: 13 },
+      start: { x: 6, y: 10 },
       pattern: [
         { direction: 'D', steps: 1 },
         { direction: 'S', steps: 1 },
@@ -68,11 +68,11 @@ export class LevelGenerator {
         { direction: 'S', steps: 1 },
       ],
       repetitions: 4,
-      energyIndices: [4, 8, 12],
+      energyIndices: [4, 9, 12],
     },
     {
       name: 'wide-wave',
-      start: { x: 2, y: 13 },
+      start: { x: 2, y: 10 },
       pattern: [
         { direction: 'D', steps: 3 },
         { direction: 'S', steps: 1 },
@@ -84,7 +84,7 @@ export class LevelGenerator {
     },
     {
       name: 'triangle',
-      start: { x: 4, y: 14 },
+      start: { x: 4, y: 11 },
       pattern: [
         { direction: 'D', steps: 1 },
         { direction: 'S', steps: 2 },
@@ -102,10 +102,11 @@ export class LevelGenerator {
     const allowsLoops = levelNumber >= 10
     const timeLimit = levelNumber >= 10 ? 60 - (levelNumber - 10) * 5 : undefined
 
+    const requiredEnergy = this.computeRequiredEnergy(levelNumber)
     const { startPosition, doorPosition, energyPositions } =
       levelNumber >= 11
-        ? this.generatePatternLevel(levelNumber, grid)
-        : this.generateNormalLevelLayout(levelNumber, grid)
+        ? this.generatePatternLevel(levelNumber, grid, requiredEnergy)
+        : this.generateNormalLevelLayout(levelNumber, grid, requiredEnergy)
 
     return {
       level: levelNumber,
@@ -113,11 +114,19 @@ export class LevelGenerator {
       startPosition,
       doorPosition,
       energyPositions,
-      requiredEnergy: Math.min(levelNumber, 3),
+      requiredEnergy,
       timeLimit,
       hasGuideLines,
       allowsLoops
     }
+  }
+
+  private computeRequiredEnergy(levelNumber: number): number {
+    const baseRequiredEnergy = Math.min(levelNumber, 3)
+    if (levelNumber >= 6 && levelNumber <= 10) {
+      return 4
+    }
+    return baseRequiredEnergy
   }
 
   private buildPatternPath(template: PatternTemplate): { x: number; y: number }[] {
@@ -170,8 +179,10 @@ export class LevelGenerator {
     }
 
     // optional extra energy placement off-path
-    if (energyPositions.length < 3) {
-      const needed = 3 - energyPositions.length
+    const requiredEnergy = this.computeRequiredEnergy(levelNumber)
+
+    if (energyPositions.length < requiredEnergy) {
+      const needed = requiredEnergy - energyPositions.length
       for (let i = 0; i < needed; i++) {
         const pos = this.findRandomSafeCell(grid, pathKeys, energyKeys, startPosition, doorPosition)
         if (pos) {
@@ -181,6 +192,8 @@ export class LevelGenerator {
         }
       }
     }
+
+    this.ensureMinimumHazards(grid, startPosition, doorPosition, energyPositions, pathKeys)
   }
 
   private findRandomSafeCell(
@@ -236,39 +249,38 @@ export class LevelGenerator {
     return grid
   }
 
-  private generateNormalLevelLayout(levelNumber: number, grid: Cell[][]) {
+  private generateNormalLevelLayout(levelNumber: number, grid: Cell[][], requiredEnergy: number) {
     const { startPosition, doorPosition } = this.generateStartAndDoorPositions()
-    grid[doorPosition.y][doorPosition.x].type = CellType.DOOR
+    const normalizedDoorPosition = this.markDoorArea(grid, doorPosition)
 
     // Generate energy positions
-    const energyPositions = this.generateEnergyPositions(levelNumber)
+    const energyPositions = this.generateEnergyPositions(levelNumber, requiredEnergy)
     energyPositions.forEach(pos => {
       grid[pos.y][pos.x].type = CellType.ENERGY
     })
 
     // Generate obstacles based on level difficulty
-    this.generateObstacles(levelNumber, grid, startPosition, doorPosition, energyPositions)
+    this.generateObstacles(levelNumber, grid, startPosition, normalizedDoorPosition, energyPositions)
 
     // Generate safe path for early levels
     if (levelNumber <= 5) {
-      this.generateGuidePath(grid, startPosition, doorPosition, energyPositions)
+      this.generateGuidePath(grid, startPosition, normalizedDoorPosition, energyPositions)
     }
 
-    return { startPosition, doorPosition, energyPositions }
+    return { startPosition, doorPosition: normalizedDoorPosition, energyPositions }
   }
 
-  private generatePatternLevel(levelNumber: number, grid: Cell[][]) {
+  private generatePatternLevel(levelNumber: number, grid: Cell[][], requiredEnergy: number) {
     const template = this.patternTemplates[Math.floor(Math.random() * this.patternTemplates.length)]
 
     const path = this.buildPatternPath(template)
     if (path.length < 2) {
-      return this.generateNormalLevelLayout(levelNumber, grid)
+      return this.generateNormalLevelLayout(levelNumber, grid, requiredEnergy)
     }
 
     const startPosition = { ...path[0] }
-    const doorPosition = { ...path[path.length - 1] }
-
-    grid[doorPosition.y][doorPosition.x].type = CellType.DOOR
+    const originalDoorPosition = { ...path[path.length - 1] }
+    const doorPosition = this.markDoorArea(grid, originalDoorPosition)
 
     const energyPositions: { x: number; y: number }[] = []
 
@@ -298,6 +310,21 @@ export class LevelGenerator {
 
     this.decoratePatternLevel(grid, path, startPosition, doorPosition, energyPositions, levelNumber)
 
+    if (energyPositions.length < requiredEnergy) {
+      const pathKeys = new Set(path.map(pos => this.positionKey(pos)))
+      const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
+      const needed = requiredEnergy - energyPositions.length
+
+      for (let i = 0; i < needed; i++) {
+        const pos = this.findRandomSafeCell(grid, pathKeys, energyKeys, startPosition, doorPosition)
+        if (pos) {
+          energyPositions.push(pos)
+          energyKeys.add(this.positionKey(pos))
+          grid[pos.y][pos.x].type = CellType.ENERGY
+        }
+      }
+    }
+
     return { startPosition, doorPosition, energyPositions }
   }
 
@@ -318,7 +345,7 @@ export class LevelGenerator {
 
     return {
       startPosition: this.randomEdgePosition(choice.start),
-      doorPosition: this.randomEdgePosition(choice.door),
+      doorPosition: this.randomDoorEdgePosition(choice.door),
     }
   }
 
@@ -337,13 +364,52 @@ export class LevelGenerator {
     }
   }
 
+  private randomDoorEdgePosition(edge: 'top' | 'bottom' | 'left' | 'right'): { x: number; y: number } {
+    const clamp = (value: number) => Math.max(0, Math.min(this.gridSize - 2, value))
+
+    switch (edge) {
+      case 'top':
+        return { x: clamp(this.randomCoordinate()), y: 0 }
+      case 'bottom':
+        return { x: clamp(this.randomCoordinate()), y: this.gridSize - 2 }
+      case 'left':
+        return { x: 0, y: clamp(this.randomCoordinate()) }
+      case 'right':
+        return { x: this.gridSize - 2, y: clamp(this.randomCoordinate()) }
+      default:
+        return { x: clamp(this.randomCoordinate()), y: this.gridSize - 2 }
+    }
+  }
+
+  private markDoorArea(grid: Cell[][], doorPosition: { x: number; y: number }): { x: number; y: number } {
+    const baseX = Math.max(0, Math.min(this.gridSize - 2, doorPosition.x))
+    const baseY = Math.max(0, Math.min(this.gridSize - 2, doorPosition.y))
+
+    for (let dy = 0; dy <= 1; dy++) {
+      for (let dx = 0; dx <= 1; dx++) {
+        const x = baseX + dx
+        const y = baseY + dy
+        const row = grid[y]
+        if (!row) continue
+
+        const cell = row[x]
+        if (cell) {
+          cell.type = CellType.DOOR
+        }
+      }
+    }
+
+    return { x: baseX, y: baseY }
+  }
+
   private randomCoordinate(): number {
     return Math.floor(Math.random() * this.gridSize)
   }
 
-  private generateEnergyPositions(levelNumber: number): { x: number; y: number }[] {
+  private generateEnergyPositions(levelNumber: number, requiredEnergy: number): { x: number; y: number }[] {
     const positions: { x: number; y: number }[] = []
-    const energyCount = Math.min(levelNumber, 3)
+    const baseEnergyCount = Math.min(levelNumber, 3)
+    const energyCount = Math.max(requiredEnergy, baseEnergyCount)
 
     for (let i = 0; i < energyCount; i++) {
       let x: number, y: number
@@ -351,7 +417,7 @@ export class LevelGenerator {
         x = Math.floor(Math.random() * (this.gridSize - 2)) + 1
         y = Math.floor(Math.random() * (this.gridSize - 2)) + 1
       } while (positions.some(pos => pos.x === x && pos.y === y))
-      
+
       positions.push({ x, y })
     }
 
@@ -369,15 +435,15 @@ export class LevelGenerator {
     const voidCount = Math.floor(obstacleCount * 0.6)
     const snakeCount = obstacleCount - voidCount
 
-    // Place void cells
     for (let i = 0; i < voidCount; i++) {
       this.placeRandomObstacle(grid, CellType.VOID, startPosition, doorPosition, energyPositions)
     }
 
-    // Place snake cells
     for (let i = 0; i < snakeCount; i++) {
       this.placeRandomObstacle(grid, CellType.SNAKE, startPosition, doorPosition, energyPositions)
     }
+
+    this.ensureMinimumHazards(grid, startPosition, doorPosition, energyPositions)
   }
 
   private placeRandomObstacle(
@@ -387,7 +453,7 @@ export class LevelGenerator {
     doorPosition: { x: number; y: number },
     energyPositions: { x: number; y: number }[],
     forbiddenPositions?: Set<string>
-  ) {
+  ): boolean {
     let x: number, y: number
     let attempts = 0
     const maxAttempts = 100
@@ -409,7 +475,49 @@ export class LevelGenerator {
 
     if (attempts < maxAttempts) {
       grid[y][x].type = type
+      grid[y][x].isPath = false
+      return true
     }
+
+    return false
+  }
+
+  private ensureMinimumHazards(
+    grid: Cell[][],
+    startPosition: { x: number; y: number },
+    doorPosition: { x: number; y: number },
+    energyPositions: { x: number; y: number }[],
+    forbiddenPositions?: Set<string>
+  ): void {
+    const totalCells = this.gridSize * this.gridSize
+    const target = Math.ceil(totalCells * 0.2)
+    let current = this.countHazards(grid)
+
+    let toggle = true
+    let safetyCounter = 0
+    const maxExtraAttempts = totalCells * 4
+
+    while (current < target && safetyCounter < maxExtraAttempts) {
+      const type = toggle ? CellType.VOID : CellType.SNAKE
+      if (this.placeRandomObstacle(grid, type, startPosition, doorPosition, energyPositions, forbiddenPositions)) {
+        current++
+      }
+      toggle = !toggle
+      safetyCounter++
+    }
+  }
+
+  private countHazards(grid: Cell[][]): number {
+    let count = 0
+    for (let y = 0; y < this.gridSize; y++) {
+      for (let x = 0; x < this.gridSize; x++) {
+        const cell = grid[y][x]
+        if (cell.type === CellType.VOID || cell.type === CellType.SNAKE) {
+          count++
+        }
+      }
+    }
+    return count
   }
 
   private generateGuidePath(
