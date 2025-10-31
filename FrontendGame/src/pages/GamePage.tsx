@@ -5,6 +5,8 @@ import { LevelGenerator } from '../game/LevelGenerator'
 import { CommandParser } from '../game/CommandParser'
 import { Play, RotateCcw, Home, HelpCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import hackerVideo from '@/assets/images/characters/video-hacker.mp4'
+import snakeGameOverVideo from '@/assets/images/gameoverscreens/Serpiente.mp4'
 
 export default function GamePage() {
   const { gameState, currentUser, dispatch } = useGameStore()
@@ -19,6 +21,7 @@ export default function GamePage() {
   const [error, setError] = useState('')
   const [currentLevel, setCurrentLevel] = useState(1)
   const [level, setLevel] = useState<any>(null)
+  const [showSnakeGameOver, setShowSnakeGameOver] = useState(false)
 
   // 🧩 Inicializar motor Pixi y cargar primer nivel
   useLayoutEffect(() => {
@@ -133,7 +136,7 @@ export default function GamePage() {
             await gameEngineRef.current.animateFailure('snake')
             setError('¡Te mordió una serpiente! Intenta de nuevo.')
             setIsPlaying(false)
-            resetLevel()
+            setShowSnakeGameOver(true)
             return
           }
 
@@ -228,7 +231,7 @@ export default function GamePage() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Canvas */}
           <div className="lg:col-span-2">
-            <div className="bg-ninja-purple rounded-lg p-6 border border-blue-500/30">
+            <div className="bg-ninja-purple rounded-lg p-6 border border-blue-500/30 relative">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold">Nivel {currentLevel}</h2>
                 <button
@@ -252,6 +255,25 @@ export default function GamePage() {
 
           {/* Control Panel */}
           <div className="space-y-6">
+            {/* Hacker Cat - Arriba de todo */}
+            <div className="flex justify-center">
+              <div className="relative w-48 h-48 sm:w-56 sm:h-56">
+                {/* Halo brillante */}
+                <div className="absolute inset-0 rounded-xl blur-xl opacity-70"
+                     style={{ background: 'radial-gradient(closest-side, rgba(56,189,248,0.6), rgba(168,85,247,0.35), transparent 70%)' }} />
+                {/* Video */}
+                <video
+                  src={hackerVideo}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="absolute inset-0 m-auto w-40 h-40 sm:w-48 sm:h-48 drop-shadow-[0_6px_16px_rgba(0,0,0,0.7)] select-none border-2 border-white/70 rounded-xl transition-transform duration-300 hover:scale-105 object-cover"
+                  aria-label="Gato hacker"
+                />
+              </div>
+            </div>
+
             {/* Level Info */}
             <div className="bg-ninja-purple rounded-lg p-4 border border-blue-500/30">
               <h3 className="font-semibold mb-3">Información del Nivel</h3>
@@ -328,9 +350,38 @@ export default function GamePage() {
                 <div className="flex items-center gap-2"><div className="w-4 h-4 bg-indigo-600 rounded-full"></div><span>Ninja</span></div>
               </div>
             </div>
+            
           </div>
         </div>
       </div>
+
+      {/* Game Over Screen - Serpiente */}
+      {showSnakeGameOver && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="relative w-full h-full max-w-4xl max-h-[90vh] flex items-center justify-center">
+            <video
+              src={snakeGameOverVideo}
+              autoPlay
+              muted
+              playsInline
+              className="w-full h-full object-contain rounded-lg"
+              onEnded={() => {
+                setShowSnakeGameOver(false)
+                resetLevel()
+              }}
+            />
+            <button
+              onClick={() => {
+                setShowSnakeGameOver(false)
+                resetLevel()
+              }}
+              className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+            >
+              Continuar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
