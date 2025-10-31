@@ -42,6 +42,7 @@ model User {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   role                UserRole             @default(USER)
+  score               Int                  @default(0)
   levels              LevelProgress[]      @relation("UserLevelProgress")
   passwordResetTokens PasswordResetToken[]
   rankings            Ranking[]            @relation("UserRanking")
@@ -69,14 +70,13 @@ model Ranking {
   id           Int      @id @default(autoincrement())
   level        Int
   userId       String
-  score        Int
   commandsUsed Int
   timeTaken    Int
   createdAt    DateTime @default(now())
   user         User     @relation("UserRanking", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([level, userId])
-  @@index([level, score])
+  @@index([level])
   @@map("rankings")
 }
 

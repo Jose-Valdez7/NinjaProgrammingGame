@@ -1,9 +1,10 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Home, Trophy, Clock, Code, LogOut } from 'lucide-react'
 import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
 
 export default function RankingPage() {
+  const navigate = useNavigate()
   const [rankings, setRankings] = useState<any[]>([])
   const [meta, setMeta] = useState<any>(null)
   const [page, setPage] = useState(1)
@@ -16,6 +17,15 @@ export default function RankingPage() {
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loggingIn, setLoggingIn] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [authTab, setAuthTab] = useState<'login' | 'register'>('login')
+  const [regFirstName, setRegFirstName] = useState('')
+  const [regLastName, setRegLastName] = useState('')
+  const [regEmail, setRegEmail] = useState('')
+  const [regPhone, setRegPhone] = useState('')
+  const [regCedula, setRegCedula] = useState('')
+  const [regLoading, setRegLoading] = useState(false)
+  const [regError, setRegError] = useState<string | null>(null)
+  const [regSuccess, setRegSuccess] = useState<string | null>(null)
 
   const fetchRankings = async (p = 1) => {
     try {
@@ -115,6 +125,75 @@ export default function RankingPage() {
       authStorage.clearAll()
       setShowLogin(true)
       setLoggingOut(false)
+    }
+  }
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setRegError(null)
+    setRegSuccess(null)
+    setRegLoading(true)
+    try {
+      const payload = {
+        firstName: regFirstName,
+        lastName: regLastName,
+        email: regEmail,
+        phone: regPhone || undefined,
+        cedula: regCedula,
+        role: 'USER',
+      }
+
+      const res = await fetch(apiUrl('api/auth/register'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        let errorMsg = text || 'Error al registrar usuario'
+        try {
+          const errorJson = JSON.parse(text)
+          if (Array.isArray(errorJson.message)) errorMsg = errorJson.message.join(', ')
+          else if (errorJson.message) errorMsg = errorJson.message
+          else if (errorJson.error) errorMsg = errorJson.error
+        } catch {}
+        throw new Error(errorMsg)
+      }
+
+      // Si el backend devuelve tokens, iniciar sesión automáticamente para ver el ranking
+      try {
+        const json = await res.json()
+        const data = json?.data || {}
+        const accessToken = data?.accessToken
+        const refreshToken = data?.refreshToken
+        const user = data?.user
+
+        if (accessToken) {
+          authStorage.setAccessToken(accessToken)
+          if (refreshToken) authStorage.setRefreshToken(refreshToken)
+          if (user) authStorage.setCurrentUser(user)
+
+          // Cerrar modal y recargar ranking
+          setShowLogin(false)
+          setLoading(true)
+          await fetchRankings(page)
+          // Limpiar formulario
+          setRegFirstName(''); setRegLastName(''); setRegEmail(''); setRegPhone(''); setRegCedula('')
+          return
+        }
+      } catch {
+        // Si no se pudo parsear JSON o faltan tokens, continuar con fallback
+      }
+
+      // Fallback si no hay tokens: informar éxito y cambiar a login
+      setRegSuccess('Registro exitoso. Por favor, inicia sesión para ver el ranking.')
+      setAuthTab('login')
+      setRegFirstName(''); setRegLastName(''); setRegEmail(''); setRegPhone(''); setRegCedula('')
+    } catch (err: any) {
+      setRegError(err?.message || 'Error al registrar usuario')
+    } finally {
+      setRegLoading(false)
     }
   }
 
@@ -248,57 +327,145 @@ export default function RankingPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/70" />
           <div className="relative bg-ninja-purple border border-blue-500/30 rounded-lg w-full max-w-md mx-4 p-6">
-            <div className="mb-4">
-              <h3 className="text-xl font-bold">Iniciar sesión</h3>
-              <p className="text-gray-300 text-sm">Accede para una mejor experiencia</p>
+            <div className="flex border-b border-blue-500/30 mb-4">
+              <button
+                className={`px-3 py-2 text-sm ${authTab === 'login' ? 'text-blue-300 border-b-2 border-blue-400' : 'text-gray-300'}`}
+                onClick={() => setAuthTab('login')}
+              >
+                Iniciar sesión
+              </button>
+              <button
+                className={`px-3 py-2 text-sm ${authTab === 'register' ? 'text-blue-300 border-b-2 border-blue-400' : 'text-gray-300'}`}
+                onClick={() => setAuthTab('register')}
+              >
+                Registrarse
+              </button>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label htmlFor="login-email" className="block text-sm text-gray-300 mb-2">Email</label>
-                <input
-                  id="login-email"
-                  type="email"
-                  className="ninja-input w-full"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  required
-                />
-              </div>
+            {authTab === 'login' && (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label htmlFor="login-email" className="block text-sm text-gray-300 mb-2">Email</label>
+                  <input
+                    id="login-email"
+                    type="email"
+                    className="ninja-input w-full"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    required
+                  />
+                </div>
 
-              <div>
-                <label htmlFor="login-cedula" className="block text-sm text-gray-300 mb-2">Cédula</label>
-                <input
-                  id="login-cedula"
-                  type="text"
-                  className="ninja-input w-full"
-                  value={loginCedula}
-                  onChange={(e) => setLoginCedula(e.target.value)}
-                  required
-                />
-              </div>
+                <div>
+                  <label htmlFor="login-cedula" className="block text-sm text-gray-300 mb-2">Cédula</label>
+                  <input
+                    id="login-cedula"
+                    type="text"
+                    className="ninja-input w-full"
+                    value={loginCedula}
+                    onChange={(e) => setLoginCedula(e.target.value)}
+                    required
+                  />
+                </div>
 
-              {loginError && (
-                <div className="text-red-400 text-sm text-center">{loginError}</div>
-              )}
+                {loginError && (
+                  <div className="text-red-400 text-sm text-center">{loginError}</div>
+                )}
 
-              <div className="flex items-center gap-3">
-                <button
-                  type="submit"
-                  className="ninja-button flex-1 disabled:opacity-60"
-                  disabled={loggingIn}
-                >
-                  {loggingIn ? 'Ingresando...' : 'Ingresar'}
-                </button>
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded border border-gray-600 text-gray-200 hover:bg-gray-800"
-                  onClick={() => setShowLogin(false)}
-                >
-                  Cerrar
-                </button>
-              </div>
-            </form>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    className="ninja-button flex-1 disabled:opacity-60"
+                    disabled={loggingIn}
+                  >
+                    {loggingIn ? 'Ingresando...' : 'Ingresar'}
+                  </button>
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded border border-gray-600 text-gray-200 hover:bg-gray-800"
+                    onClick={() => navigate(-1)}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {authTab === 'register' && (
+              <form onSubmit={handleRegister} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-2">Nombre</label>
+                    <input
+                      type="text"
+                      className="ninja-input w-full"
+                      value={regFirstName}
+                      onChange={(e) => setRegFirstName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-2">Apellido</label>
+                    <input
+                      type="text"
+                      className="ninja-input w-full"
+                      value={regLastName}
+                      onChange={(e) => setRegLastName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-2">Email</label>
+                  <input
+                    type="email"
+                    className="ninja-input w-full"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text sm text-gray-300 mb-2">Teléfono</label>
+                  <input
+                    type="tel"
+                    className="ninja-input w-full"
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-2">Cédula</label>
+                  <input
+                    type="text"
+                    className="ninja-input w-full"
+                    value={regCedula}
+                    onChange={(e) => setRegCedula(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {regError && <div className="text-red-400 text-sm">{regError}</div>}
+                {regSuccess && <div className="text-green-400 text-sm">{regSuccess}</div>}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    className="ninja-button flex-1 disabled:opacity-60"
+                    disabled={regLoading}
+                  >
+                    {regLoading ? 'Registrando...' : 'Registrar'}
+                  </button>
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded border border-gray-600 text-gray-200 hover:bg-gray-800"
+                    onClick={() => navigate(-1)}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

@@ -763,7 +763,7 @@ export class GameEngine {
     graphics.stroke({ color: 0xfbbf24, width: 2, alpha: 0.8 }).circle(this.cellSize / 2, this.cellSize / 2, this.cellSize / 2 - 2).stroke()
   }
 
-  private updateGuideOverlay(level: GameLevel): void {
+  private updateGuideOverlay(level: GameLevel, pathOverride?: { x: number; y: number }[]): void {
     this.currentLevelData = level
 
     const gridContainer = this.gridContainer
@@ -780,7 +780,7 @@ export class GameEngine {
       return
     }
 
-    const path = this.buildGuidePath(level)
+    const path = pathOverride ?? this.buildGuidePath(level)
     if (path.length < 2) {
       return
     }
@@ -825,6 +825,14 @@ export class GameEngine {
 
     gridContainer.addChild(overlay)
     this.guideOverlay = overlay
+  }
+
+  public previewGuideForCommands(commands: Command[]): void {
+    const level = this.currentLevelData
+    if (!level || !level.hasGuideLines) return
+
+    const path = this.buildPathFromCommands(level, commands)
+    this.updateGuideOverlay(level, path)
   }
 
   private createArrow(tip: { x: number; y: number }, prev: { x: number; y: number }): Graphics {
@@ -893,6 +901,43 @@ export class GameEngine {
     }
 
     return path
+  }
+
+  private buildPathFromCommands(level: GameLevel, commands: Command[]): { x: number; y: number }[] {
+    const path: { x: number; y: number }[] = []
+    const current = { ...level.startPosition }
+
+    path.push({ ...current })
+
+    for (const command of commands) {
+      for (let step = 0; step < command.steps; step++) {
+        switch (command.direction) {
+          case 'D': current.x += 1; break
+          case 'I': current.x -= 1; break
+          case 'S': current.y -= 1; break
+          case 'B': current.y += 1; break
+        }
+
+        if (!this.isWalkable(level, current.x, current.y)) {
+          return path
+        }
+
+        path.push({ ...current })
+      }
+    }
+
+    return path
+  }
+
+  private isWalkable(level: GameLevel, x: number, y: number): boolean {
+    if (x < 0 || y < 0 || x >= this.gridSize || y >= this.gridSize) {
+      return false
+    }
+
+    const cell = level.grid[y][x]
+    if (!cell) return false
+
+    return cell.type !== CellType.VOID && cell.type !== CellType.SNAKE
   }
 
   public setGuideVisibility(visible: boolean): void {
