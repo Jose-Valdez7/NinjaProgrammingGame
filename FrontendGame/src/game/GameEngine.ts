@@ -1,44 +1,157 @@
-import { Application, Assets, Container, Graphics, Text } from 'pixi.js'
-import { Sprite, Texture } from 'pixi.js'
+import { Application, Assets, Container, Graphics, Text, Texture, AnimatedSprite, Sprite } from 'pixi.js'
 import { Spine } from '@esotericsoftware/spine-pixi-v8'
 import { gsap } from 'gsap'
-import { GameLevel, CellType } from '../types/game'
-import grassPng from '@/assets/images/textures/grass.png'
-import blackholePng from '@/assets/images/textures/blackhole.png'
-import snakePng from '@/assets/images/textures/snake.png'
-import doorPng from '@/assets/images/textures/door.png'
-import energyPng from '@/assets/images/textures/energy.png'
+import { GameLevel, CellType, Command } from '../types/game'
+const snakeFrameSources = Array.from({ length: 10 }, (_, index) =>
+  new URL(`../assets/snake/Snake${index + 1}.png`, import.meta.url).href
+)
+
+const snakeTextureManifests = snakeFrameSources.map((src, index) => ({
+  alias: `snake-frame-${index + 1}`,
+  src,
+}))
+
+const createSnakeImages = (): HTMLImageElement[] => {
+  if (typeof window === 'undefined' || typeof Image === 'undefined') {
+    return []
+  }
+
+  return snakeFrameSources.map(src => {
+    const image = new Image()
+    image.src = src
+    return image
+  })
+}
+
+const doorFrameSources = Array.from({ length: 9 }, (_, index) =>
+  new URL(`../assets/door/door${index + 1}.png`, import.meta.url).href
+)
+
+const doorTextureManifests = doorFrameSources.map((src, index) => ({
+  alias: `door-frame-${index + 1}`,
+  src,
+}))
+
+const SAFE_TILE_TEXTURE = new URL('../assets/images/backgrounds/secure1.png', import.meta.url).href
+const VOID_TILE_TEXTURE = new URL('../assets/void/void1.png', import.meta.url).href
+const ENERGY_TILE_TEXTURE = new URL('../assets/energy/energy1.png', import.meta.url).href
+
+const baseTileTextureManifests = [
+  { alias: 'tile-safe', src: SAFE_TILE_TEXTURE },
+  { alias: 'tile-void', src: VOID_TILE_TEXTURE },
+  { alias: 'tile-energy', src: ENERGY_TILE_TEXTURE },
+]
+
+const createDoorImages = (): HTMLImageElement[] => {
+  if (typeof window === 'undefined' || typeof Image === 'undefined') {
+    return []
+  }
+
+  return doorFrameSources.map(src => {
+    const image = new Image()
+    image.src = src
+    return image
+  })
+}
+
+const positionKey = (x: number, y: number): string => `${x},${y}`
+
+type DoorCoverage = {
+  mainKey: string | null
+  overlayKeys: Set<string>
+}
+
+const computeDoorCoverage = (
+  level: GameLevel | null | undefined,
+  gridSize: number
+): DoorCoverage => {
+  const overlayKeys = new Set<string>()
+  let mainKey: string | null = null
+
+  let doorPosition = level?.doorPosition ?? null
+
+  if (!doorPosition && level) {
+    for (let y = 0; y < level.grid.length; y++) {
+      for (let x = 0; x < level.grid[y].length; x++) {
+        if (level.grid[y][x].type === CellType.DOOR) {
+          doorPosition = { x, y }
+          break
+        }
+      }
+      if (doorPosition) break
+    }
+  }
+
+  if (doorPosition) {
+    const { x, y } = doorPosition
+    mainKey = positionKey(x, y)
+
+    for (let dy = 0; dy <= 1; dy++) {
+      for (let dx = 0; dx <= 1; dx++) {
+        const nx = x + dx
+        const ny = y + dy
+
+        if (nx >= gridSize || ny >= gridSize) continue
+
+        if (dx === 0 && dy === 0) continue
+
+        overlayKeys.add(positionKey(nx, ny))
+      }
+    }
+  }
+
+  return { mainKey, overlayKeys }
+}
 
 // Sistema de sprites avanzado con Canvas HTML5 nativo
 class NativeCanvasRenderer {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
-  private cellSize: number = 32
-  private gridSize: number = 15
+  private cellSize: number
+  private gridSize: number
   private ninjaX: number = 0
   private ninjaY: number = 0
   private level: GameLevel | null = null
   private ninjaState: 'idle' | 'walking' | 'energized' | 'falling' | 'victory' = 'idle'
   private walkFrame: number = 0
   private energyLevel: number = 0
+  private persistentEnergized = false
   private animationTime: number = 0
+  private snakeImages: HTMLImageElement[] = createSnakeImages()
+  private doorImages: HTMLImageElement[] = createDoorImages()
+  private safeImage: HTMLImageElement | null = null
+  private voidImage: HTMLImageElement | null = null
+  private energyImage: HTMLImageElement | null = null
+  private snakeFrameIndex: number = 0
+  private doorFrameIndex: number = 0
+  private snakeAnimationInterval: number | null = null
+  private doorAnimationInterval: number | null = null
+  private readonly snakeFrameIntervalMs = 100
+  private readonly doorFrameIntervalMs = 500
+  private doorCoverage: DoorCoverage = { mainKey: null, overlayKeys: new Set() }
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, gridSize: number, cellSize: number) {
     this.canvas = canvas
+    this.gridSize = gridSize
+    this.cellSize = cellSize
     const context = canvas.getContext('2d')
     if (!context) {
       throw new Error('No se pudo obtener un contexto 2D del canvas para el renderer nativo.')
     }
 
     this.ctx = context
-    this.canvas.width = 480
-    this.canvas.height = 480
+    this.canvas.width = this.gridSize * this.cellSize
+    this.canvas.height = this.gridSize * this.cellSize
   }
 
   loadLevel(level: GameLevel): void {
     this.level = level
     this.ninjaX = level.startPosition.x
     this.ninjaY = level.startPosition.y
+    this.doorCoverage = computeDoorCoverage(level, this.gridSize)
+    this.persistentEnergized = false
+    this.startSnakeAnimation()
+    this.startDoorAnimation()
     this.render()
   }
 
@@ -50,8 +163,11 @@ class NativeCanvasRenderer {
 
   animateNinjaMovement(_fromX: number, _fromY: number, toX: number, toY: number): Promise<void> {
     return new Promise((resolve) => {
-      this.ninjaState = 'walking'
-      this.walkFrame = 0
+      const energized = this.persistentEnergized
+      this.ninjaState = energized ? 'energized' : 'walking'
+      if (!energized) {
+        this.walkFrame = 0
+      }
 
       gsap.to(this, {
         duration: 0.3,
@@ -60,7 +176,7 @@ class NativeCanvasRenderer {
         ninjaY: toY,
         onUpdate: () => this.render(),
         onComplete: () => {
-          this.ninjaState = 'idle'
+          this.ninjaState = energized ? 'energized' : 'idle'
           resolve()
         }
       })
@@ -71,6 +187,7 @@ class NativeCanvasRenderer {
     // Activar estado energizado
     this.ninjaState = 'energized'
     this.energyLevel = 100
+    this.persistentEnergized = true
 
     // Efecto de partículas de energía
     const particles: Array<{ x: number, y: number, vx: number, vy: number, life: number }> = []
@@ -110,8 +227,8 @@ class NativeCanvasRenderer {
       if (particles.some(p => p.life > 0) || this.energyLevel > 0) {
         requestAnimationFrame(animateParticles)
       } else {
-        this.ninjaState = 'idle'
         this.energyLevel = 0
+        this.ninjaState = this.persistentEnergized ? 'energized' : 'idle'
       }
     }
 
@@ -120,7 +237,7 @@ class NativeCanvasRenderer {
 
   animateFailure(type: 'void' | 'snake'): Promise<void> {
     return new Promise((resolve) => {
-      this.ninjaState = 'falling'
+      this.persistentEnergized = false
 
       if (type === 'void') {
         // Animación de caída al vacío
@@ -153,7 +270,6 @@ class NativeCanvasRenderer {
           if (alpha > 0) {
             requestAnimationFrame(animateFall)
           } else {
-            this.ninjaState = 'idle'
             resolve()
           }
         }
@@ -228,7 +344,7 @@ class NativeCanvasRenderer {
         if (lightAlpha > 0) {
           requestAnimationFrame(animateLight)
         } else {
-          this.ninjaState = 'idle'
+          this.ninjaState = this.persistentEnergized ? 'energized' : 'idle'
           resolve()
         }
       }
@@ -242,7 +358,7 @@ class NativeCanvasRenderer {
     this.ctx.translate(x, y)
 
     // Efectos de energía si está energizado
-    if (this.ninjaState === 'energized' || this.energyLevel > 0) {
+    if (this.ninjaState === 'energized' || this.energyLevel > 0 || this.persistentEnergized) {
       this.drawEnergyEffects()
     }
 
@@ -380,38 +496,242 @@ class NativeCanvasRenderer {
     this.ctx.globalAlpha = 1
   }
 
+  private startSnakeAnimation(): void {
+    if (this.snakeImages.length === 0 || typeof window === 'undefined') {
+      return
+    }
+
+    if (this.snakeAnimationInterval !== null) {
+      return
+    }
+
+    this.snakeAnimationInterval = window.setInterval(() => {
+      if (!this.level) {
+        return
+      }
+
+      this.snakeFrameIndex = (this.snakeFrameIndex + 1) % this.snakeImages.length
+      this.render()
+    }, this.snakeFrameIntervalMs)
+  }
+
+  private stopSnakeAnimation(): void {
+    if (this.snakeAnimationInterval !== null && typeof window !== 'undefined') {
+      window.clearInterval(this.snakeAnimationInterval)
+      this.snakeAnimationInterval = null
+    }
+  }
+
+  private startDoorAnimation(): void {
+    if (this.doorImages.length === 0 || typeof window === 'undefined') {
+      return
+    }
+
+    if (this.doorAnimationInterval !== null) {
+      return
+    }
+
+    this.doorAnimationInterval = window.setInterval(() => {
+      if (!this.level) {
+        return
+      }
+
+      this.doorFrameIndex = (this.doorFrameIndex + 1) % this.doorImages.length
+      this.render()
+    }, this.doorFrameIntervalMs)
+  }
+
+  private stopDoorAnimation(): void {
+    if (this.doorAnimationInterval !== null && typeof window !== 'undefined') {
+      window.clearInterval(this.doorAnimationInterval)
+      this.doorAnimationInterval = null
+    }
+  }
+
+  private drawTileImage(
+    pixelX: number,
+    pixelY: number,
+    src: string,
+    cacheKey: 'safeImage' | 'voidImage' | 'energyImage',
+    width: number = this.cellSize,
+    height: number = this.cellSize
+  ): void {
+    if (typeof window === 'undefined' || typeof Image === 'undefined') {
+      this.ctx.fillStyle = '#1f2937'
+      this.ctx.fillRect(pixelX, pixelY, width, height)
+      return
+    }
+
+    let cache: HTMLImageElement | null
+
+    switch (cacheKey) {
+      case 'safeImage':
+        cache = this.safeImage
+        break
+      case 'voidImage':
+        cache = this.voidImage
+        break
+      case 'energyImage':
+        cache = this.energyImage
+        break
+    }
+
+    if (!cache) {
+      cache = new Image()
+      cache.src = src
+      cache.onload = () => this.render()
+
+      switch (cacheKey) {
+        case 'safeImage':
+          this.safeImage = cache
+          break
+        case 'voidImage':
+          this.voidImage = cache
+          break
+        case 'energyImage':
+          this.energyImage = cache
+          break
+      }
+    }
+
+    if (cache.complete && cache.naturalWidth > 0) {
+      this.ctx.drawImage(cache, pixelX, pixelY, width, height)
+    }
+  }
+
   private render(): void {
     if (!this.level) return
 
-    // Limpiar canvas
-    this.ctx.fillStyle = '#22c55e'
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
+    const processedVoidCells = new Set<string>()
+    const processedSnakeCells = new Set<string>()
 
-    // Dibujar grid
     for (let y = 0; y < this.gridSize; y++) {
       for (let x = 0; x < this.gridSize; x++) {
         const cell = this.level.grid[y][x]
         const pixelX = x * this.cellSize
         const pixelY = y * this.cellSize
+        const key = positionKey(x, y)
+        const isDoorMain = this.doorCoverage.mainKey === key
+        const isDoorOverlay = this.doorCoverage.overlayKeys.has(key)
 
-        // Color de fondo
-        const colors: Record<CellType, string> = {
-          [CellType.SAFE]: '#22c55e',
-          [CellType.ENERGY]: '#fbbf24',
-          [CellType.VOID]: '#000000',
-          [CellType.SNAKE]: '#dc2626',
-          [CellType.DOOR]: '#2563eb',
+        if (cell.type === CellType.VOID) {
+          if (processedVoidCells.has(key)) {
+            continue
+          }
+
+          processedVoidCells.add(key)
+
+          let drawWidth = this.cellSize
+          let drawHeight = this.cellSize
+
+          const rightKey = positionKey(x + 1, y)
+          if (x + 1 < this.gridSize) {
+            const rightCell = this.level.grid[y][x + 1]
+            if (rightCell.type === CellType.VOID && !processedVoidCells.has(rightKey)) {
+              drawWidth = this.cellSize * 2
+              processedVoidCells.add(rightKey)
+            }
+          }
+
+          if (drawWidth === this.cellSize && y + 1 < this.gridSize) {
+            const bottomKey = positionKey(x, y + 1)
+            const bottomCell = this.level.grid[y + 1][x]
+            if (bottomCell.type === CellType.VOID && !processedVoidCells.has(bottomKey)) {
+              drawHeight = this.cellSize * 2
+              processedVoidCells.add(bottomKey)
+            }
+          }
+
+          this.drawTileImage(pixelX, pixelY, VOID_TILE_TEXTURE, 'voidImage', drawWidth, drawHeight)
+          this.ctx.strokeStyle = '#6b7280'
+          this.ctx.lineWidth = 1
+          this.ctx.strokeRect(pixelX, pixelY, drawWidth, drawHeight)
+          continue
         }
 
-        this.ctx.fillStyle = colors[cell.type] || '#374151'
-        this.ctx.fillRect(pixelX, pixelY, this.cellSize, this.cellSize)
+        if (cell.type === CellType.SNAKE) {
+          if (processedSnakeCells.has(key)) {
+            continue
+          }
 
-        // Borde
-        this.ctx.strokeStyle = '#6b7280'
-        this.ctx.lineWidth = 1
-        this.ctx.strokeRect(pixelX, pixelY, this.cellSize, this.cellSize)
+          processedSnakeCells.add(key)
 
-        // Líneas guía para celdas de camino
+          let drawWidth = this.cellSize
+          let drawHeight = this.cellSize
+
+          const rightKey = positionKey(x + 1, y)
+          if (x + 1 < this.gridSize) {
+            const rightCell = this.level.grid[y][x + 1]
+            if (rightCell.type === CellType.SNAKE && !processedSnakeCells.has(rightKey)) {
+              drawWidth = this.cellSize * 2
+              processedSnakeCells.add(rightKey)
+            }
+          }
+
+          if (drawWidth === this.cellSize && y + 1 < this.gridSize) {
+            const bottomKey = positionKey(x, y + 1)
+            const bottomCell = this.level.grid[y + 1][x]
+            if (bottomCell.type === CellType.SNAKE && !processedSnakeCells.has(bottomKey)) {
+              drawHeight = this.cellSize * 2
+              processedSnakeCells.add(bottomKey)
+            }
+          }
+
+          this.ctx.fillStyle = '#0f172a'
+          this.ctx.fillRect(pixelX, pixelY, drawWidth, drawHeight)
+
+          if (this.snakeImages.length > 0) {
+            const frame = this.snakeImages[this.snakeFrameIndex % this.snakeImages.length]
+            if (!frame.complete) {
+              frame.onload = () => this.render()
+            } else {
+              this.ctx.drawImage(frame, pixelX, pixelY, drawWidth, drawHeight)
+            }
+          }
+
+          this.ctx.strokeStyle = '#1f2937'
+          this.ctx.lineWidth = 1
+          this.ctx.strokeRect(pixelX, pixelY, drawWidth, drawHeight)
+          continue
+        }
+
+        const isDoorCell = isDoorMain || isDoorOverlay || cell.type === CellType.DOOR
+
+        if (isDoorCell) {
+          this.drawTileImage(pixelX, pixelY, SAFE_TILE_TEXTURE, 'safeImage')
+        } else if (cell.type === CellType.SAFE) {
+          this.drawTileImage(pixelX, pixelY, SAFE_TILE_TEXTURE, 'safeImage')
+        } else if (cell.type === CellType.ENERGY) {
+          this.drawTileImage(pixelX, pixelY, ENERGY_TILE_TEXTURE, 'energyImage')
+        } else {
+          const colors: Record<CellType, string> = {
+            [CellType.SAFE]: '#22c55e',
+            [CellType.ENERGY]: '#fbbf24',
+            [CellType.VOID]: '#000000',
+            [CellType.SNAKE]: '#134e4a',
+            [CellType.DOOR]: '#374151',
+          }
+
+          this.ctx.fillStyle = colors[cell.type] || '#374151'
+          this.ctx.fillRect(pixelX, pixelY, this.cellSize, this.cellSize)
+        }
+
+        if (isDoorMain && this.doorImages.length > 0) {
+          const frame = this.doorImages[this.doorFrameIndex % this.doorImages.length]
+          if (!frame.complete) {
+            frame.onload = () => this.render()
+          } else {
+            const drawSize = this.cellSize * 2
+            this.ctx.drawImage(frame, pixelX, pixelY, drawSize, drawSize)
+          }
+        }
+
+        if (!isDoorCell) {
+          this.ctx.strokeStyle = '#6b7280'
+          this.ctx.lineWidth = 1
+          this.ctx.strokeRect(pixelX, pixelY, this.cellSize, this.cellSize)
+        }
+
         if (this.level.hasGuideLines && cell.isPath) {
           this.ctx.strokeStyle = '#fbbf24'
           this.ctx.lineWidth = 3
@@ -432,13 +752,10 @@ class NativeCanvasRenderer {
       }
     }
 
-    // Dibujar ninja completo
     const ninjaPixelX = this.ninjaX * this.cellSize + this.cellSize / 2
     const ninjaPixelY = this.ninjaY * this.cellSize + this.cellSize / 2
-
     this.drawNinja(ninjaPixelX, ninjaPixelY)
 
-    // Actualizar animación
     this.animationTime++
     if (this.ninjaState === 'walking') {
       this.walkFrame++
@@ -446,7 +763,8 @@ class NativeCanvasRenderer {
   }
 
   destroy(): void {
-    // No se requieren limpiezas específicas, pero se deja el método para simetría
+    this.stopSnakeAnimation()
+    this.stopDoorAnimation()
   }
 }
 
@@ -469,26 +787,36 @@ export class GameEngine {
   private textures: Record<string, Texture> = {}
   private readonly cellSize: number
   private readonly gridSize: number
-  private currentNinjaX = 0
-  private currentNinjaY = 0
+  private ninjaEnergized = false
   private ready = false
   private currentLevelData: GameLevel | null = null
   private guideOverlay: Graphics | null = null
   private guideVisible = false
+  private snakeTextures: Texture[] = []
+  private snakeTexturesPromise: Promise<void> | null = null
+  private doorTextures: Texture[] = []
+  private doorTexturesPromise: Promise<void> | null = null
+  private safeTexture: Texture | null = null
+  private voidTexture: Texture | null = null
+  private energyTexture: Texture | null = null
+  private baseTileTexturesPromise: Promise<void> | null = null
+  private doorCoverage: DoorCoverage = { mainKey: null, overlayKeys: new Set() }
 
   constructor(container: HTMLElement, options?: GameEngineOptions) {
     this.container = container
-    this.cellSize = options?.cellSize ?? 48
-    this.gridSize = options?.gridSize ?? 15
+    this.gridSize = options?.gridSize ?? 12
 
-    const gameWidth = options?.width ?? 480
-    const gameHeight = options?.height ?? 480
+    const baseCellSize = options?.cellSize ?? 32
+    this.cellSize = Math.round(baseCellSize * 1.25)
+
+    const gameWidth = options?.width ?? this.gridSize * this.cellSize
+    const gameHeight = options?.height ?? this.gridSize * this.cellSize
 
     this.canvasElement = document.createElement('canvas')
     this.canvasElement.width = gameWidth
     this.canvasElement.height = gameHeight
-    this.canvasElement.style.width = `${gameWidth}px`
-    this.canvasElement.style.height = `${gameHeight}px`
+    this.canvasElement.style.width = `${gameWidth * 1.5}px`
+    this.canvasElement.style.height = `${gameHeight * 1.5}px`
     this.canvasElement.style.imageRendering = 'pixelated'
     this.canvasElement.className = 'ninja-canvas'
 
@@ -516,7 +844,7 @@ export class GameEngine {
       this.ready = true
     } catch (error) {
       console.warn('No fue posible inicializar PixiJS, usando renderer nativo.', error)
-      this.switchToNativeRenderer(width, height)
+      this.switchToNativeRenderer()
       this.ready = true
     }
   }
@@ -535,6 +863,7 @@ export class GameEngine {
 
     const gameContainer = new Container()
     const gridContainer = new Container()
+    gridContainer.sortableChildren = true
     const ninjaSprite = this.createAdvancedNinjaSprite()
 
     app.stage.addChild(gameContainer)
@@ -550,19 +879,20 @@ export class GameEngine {
     void this.loadTextures()
   }
 
-  private switchToNativeRenderer(width: number, height: number): void {
+  private switchToNativeRenderer(): void {
     const fallbackCanvas = document.createElement('canvas')
-    fallbackCanvas.width = width
-    fallbackCanvas.height = height
-    fallbackCanvas.style.width = `${width}px`
-    fallbackCanvas.style.height = `${height}px`
+    const canvasSize = this.gridSize * this.cellSize
+    fallbackCanvas.width = canvasSize
+    fallbackCanvas.height = canvasSize
+    fallbackCanvas.style.width = `${canvasSize * 1.5}px`
+    fallbackCanvas.style.height = `${canvasSize * 1.5}px`
     fallbackCanvas.style.imageRendering = 'pixelated'
     fallbackCanvas.className = this.canvasElement.className
 
     this.container.replaceChild(fallbackCanvas, this.canvasElement)
     this.canvasElement = fallbackCanvas
 
-    this.app = new NativeCanvasRenderer(this.canvasElement)
+    this.app = new NativeCanvasRenderer(this.canvasElement, this.gridSize, this.cellSize)
   }
 
   private async ensureSpineNinja(): Promise<void> {
@@ -580,8 +910,8 @@ export class GameEngine {
             { alias: 'spineTexture', src: '/spine/spineboy-pma.png' },
           ])
 
-          const spine = Spine.from({ skeleton: 'spineSkeleton', atlas: 'spineAtlas' } as any)
-          const scale = (this.cellSize / 120) * 0.6
+          const spine = Spine.from({ skeleton: 'spineSkeleton', atlas: 'spineAtlas' })
+          const scale = (this.cellSize / 120) * 0.3
           spine.scale.set(scale)
           spine.x = 0
           spine.y = this.cellSize / 2
@@ -655,57 +985,145 @@ export class GameEngine {
     return container
   }
 
-  private async loadTextures(): Promise<void> {
-    try {
-      await Assets.load([
-        { alias: 'texGrass', src: grassPng },
-        { alias: 'texVoid', src: blackholePng },
-        { alias: 'texSnake', src: snakePng },
-        { alias: 'texDoor', src: doorPng },
-        { alias: 'texEnergy', src: energyPng },
-      ])
-
-      this.textures = {
-        grass: Assets.get('texGrass'),
-        void: Assets.get('texVoid'),
-        snake: Assets.get('texSnake'),
-        door: Assets.get('texDoor'),
-        energy: Assets.get('texEnergy'),
-      }
-    } catch (e) {
-      console.warn('No se pudieron cargar las texturas del tablero:', e)
-    }
-  }
-
-  private createCellSprite(cellType: CellType): Container {
+  private createCellSprite(cellType: CellType, width = this.cellSize, height = this.cellSize): Container {
     const container = new Container()
 
-    const texMap: Partial<Record<CellType, Texture>> = {
-      [CellType.SAFE]: this.textures.grass,
-      [CellType.VOID]: this.textures.void,
-      [CellType.SNAKE]: this.textures.snake,
-      [CellType.DOOR]: this.textures.door,
-      [CellType.ENERGY]: this.textures.energy,
+    const fallbackColors: Record<CellType, number> = {
+      [CellType.SAFE]: 0x1f2937,
+      [CellType.ENERGY]: 0xfbbf24,
+      [CellType.VOID]: 0x000000,
+      [CellType.SNAKE]: 0x134e4a,
+      [CellType.DOOR]: 0x1f2937,
     }
 
-    const tex = texMap[cellType]
-    if (tex) {
-      const sprite = new Sprite(tex)
-      sprite.width = this.cellSize
-      sprite.height = this.cellSize
+    const background = new Graphics()
+    background
+      .fill({ color: fallbackColors[cellType] ?? 0x374151 })
+      .rect(0, 0, width, height)
+      .fill()
+    container.addChild(background)
+
+    const tileTexture = (() => {
+      if (cellType === CellType.SAFE || cellType === CellType.DOOR) {
+        return this.safeTexture
+      }
+      if (cellType === CellType.VOID) {
+        return this.voidTexture
+      }
+      if (cellType === CellType.ENERGY) {
+        return this.energyTexture
+      }
+      return null
+    })()
+
+    if (tileTexture) {
+      const tileSprite = new Sprite(tileTexture)
+      tileSprite.width = width
+      tileSprite.height = height
+      container.addChild(tileSprite)
+    }
+
+    if (cellType !== CellType.DOOR) {
+      const border = new Graphics()
+      border.stroke({ color: 0x6b7280, width: 1 }).rect(0, 0, width, height).stroke()
+      container.addChild(border)
+    }
+
+    if (cellType === CellType.SNAKE && this.snakeTextures.length > 0) {
+      const sprite = new AnimatedSprite(this.snakeTextures)
+      sprite.loop = true
+      sprite.animationSpeed = 0.1
+      sprite.play()
+      sprite.width = width
+      sprite.height = height
       container.addChild(sprite)
-    } else {
-      const g = new Graphics()
-      g.fill({ color: 0x374151 }).rect(0, 0, this.cellSize, this.cellSize).fill()
-      container.addChild(g)
     }
 
-    // Borde sobre la textura
-    const border = new Graphics()
-    border.stroke({ color: 0x6b7280, width: 1 }).rect(0, 0, this.cellSize, this.cellSize).stroke()
-    container.addChild(border)
+    container.cacheAsBitmap = false
 
     return container
+  }
+
+  private addEnergyGlow(target: Container): void {
+    const glow = new Graphics()
+    glow.stroke({ color: 0xfbbf24, width: 2, alpha: 0.8 }).circle(this.cellSize / 2, this.cellSize / 2, this.cellSize / 2 - 2).stroke()
+    target.addChild(glow)
+  }
+
+  private ensureSnakeTextures(): Promise<void> {
+    if (this.snakeTextures.length > 0) {
+      return Promise.resolve()
+    }
+
+    if (this.snakeTexturesPromise) {
+      return this.snakeTexturesPromise
+    }
+
+    this.snakeTexturesPromise = (async () => {
+      try {
+        await Assets.load(snakeTextureManifests)
+        this.snakeTextures = snakeTextureManifests.map(manifest => Texture.from(manifest.alias))
+      } catch (error) {
+        console.warn('No se pudieron cargar las texturas de serpiente:', error)
+        this.snakeTextures = []
+      } finally {
+        this.snakeTexturesPromise = null
+      }
+    })()
+
+    return this.snakeTexturesPromise
+  }
+
+  private ensureDoorTextures(): Promise<void> {
+    if (this.doorTextures.length > 0) {
+      return Promise.resolve()
+    }
+
+    if (this.doorTexturesPromise) {
+      return this.doorTexturesPromise
+    }
+
+    this.doorTexturesPromise = (async () => {
+      try {
+        await Assets.load(doorTextureManifests)
+        this.doorTextures = doorTextureManifests.map(manifest => Texture.from(manifest.alias))
+      } catch (error) {
+        console.warn('No se pudieron cargar las texturas de puerta:', error)
+        this.doorTextures = []
+      } finally {
+        this.doorTexturesPromise = null
+      }
+    })()
+
+    return this.doorTexturesPromise
+  }
+
+  private ensureBaseTileTextures(): Promise<void> {
+    if (this.safeTexture && this.voidTexture && this.energyTexture) {
+      return Promise.resolve()
+    }
+
+    if (this.baseTileTexturesPromise) {
+      return this.baseTileTexturesPromise
+    }
+
+    this.baseTileTexturesPromise = (async () => {
+      try {
+        await Assets.load(baseTileTextureManifests)
+        this.safeTexture = Texture.from(SAFE_TILE_TEXTURE)
+        this.voidTexture = Texture.from(VOID_TILE_TEXTURE)
+        this.energyTexture = Texture.from(ENERGY_TILE_TEXTURE)
+      } catch (error) {
+        console.warn('No se pudieron cargar las texturas base de losetas:', error)
+        this.safeTexture = null
+        this.voidTexture = null
+        this.energyTexture = null
+      } finally {
+        this.baseTileTexturesPromise = null
+      }
+    })()
+
+    return this.baseTileTexturesPromise
   }
 
   public async loadLevel(level: GameLevel): Promise<void> {
@@ -717,14 +1135,15 @@ export class GameEngine {
     const native = this.nativeRenderer
     if (native) {
       native.loadLevel(level)
+      this.ninjaEnergized = false
       return
     }
 
     void this.ensureSpineNinja()
-    // Asegurar texturas antes de construir el grid
-    if (!this.textures.grass) {
-      await this.loadTextures()
-    }
+    await this.ensureSnakeTextures()
+    await this.ensureDoorTextures()
+    await this.ensureBaseTileTextures()
+    this.doorCoverage = computeDoorCoverage(level, this.gridSize)
 
     if (!this.pixiApp) {
       console.error('Renderer no disponible al cargar nivel')
@@ -739,28 +1158,126 @@ export class GameEngine {
 
     gridContainer.removeChildren()
 
+    const doorOverlaySprites: AnimatedSprite[] = []
+    const processedVoidCells = new Set<string>()
+    const processedSnakeCells = new Set<string>()
+
     for (let y = 0; y < this.gridSize; y++) {
       for (let x = 0; x < this.gridSize; x++) {
         const cell = level.grid[y][x]
-        const cellSprite = this.createCellSprite(cell.type)
+        const key = positionKey(x, y)
+        const isDoorMain = this.doorCoverage.mainKey === key
+        const isDoorOverlay = this.doorCoverage.overlayKeys.has(key)
+
+        if (cell.type === CellType.VOID) {
+          if (processedVoidCells.has(key)) {
+            continue
+          }
+
+          processedVoidCells.add(key)
+
+          let drawWidth = this.cellSize
+          let drawHeight = this.cellSize
+
+          const rightKey = positionKey(x + 1, y)
+          if (x + 1 < this.gridSize) {
+            const rightCell = level.grid[y][x + 1]
+            if (rightCell.type === CellType.VOID && !processedVoidCells.has(rightKey)) {
+              drawWidth = this.cellSize * 2
+              processedVoidCells.add(rightKey)
+            }
+          }
+
+          if (drawWidth === this.cellSize && y + 1 < this.gridSize) {
+            const bottomKey = positionKey(x, y + 1)
+            const bottomCell = level.grid[y + 1][x]
+            if (bottomCell.type === CellType.VOID && !processedVoidCells.has(bottomKey)) {
+              drawHeight = this.cellSize * 2
+              processedVoidCells.add(bottomKey)
+            }
+          }
+
+          const voidSprite = this.createCellSprite(CellType.VOID, drawWidth, drawHeight)
+          voidSprite.x = x * this.cellSize
+          voidSprite.y = y * this.cellSize
+          voidSprite.zIndex = 1
+          gridContainer.addChild(voidSprite)
+          continue
+        }
+
+        if (cell.type === CellType.SNAKE) {
+          if (processedSnakeCells.has(key)) {
+            continue
+          }
+
+          processedSnakeCells.add(key)
+
+          let drawWidth = this.cellSize
+          let drawHeight = this.cellSize
+
+          const rightKey = positionKey(x + 1, y)
+          if (x + 1 < this.gridSize) {
+            const rightCell = level.grid[y][x + 1]
+            if (rightCell.type === CellType.SNAKE && !processedSnakeCells.has(rightKey)) {
+              drawWidth = this.cellSize * 2
+              processedSnakeCells.add(rightKey)
+            }
+          }
+
+          if (drawWidth === this.cellSize && y + 1 < this.gridSize) {
+            const bottomKey = positionKey(x, y + 1)
+            const bottomCell = level.grid[y + 1][x]
+            if (bottomCell.type === CellType.SNAKE && !processedSnakeCells.has(bottomKey)) {
+              drawHeight = this.cellSize * 2
+              processedSnakeCells.add(bottomKey)
+            }
+          }
+
+          const snakeSprite = this.createCellSprite(CellType.SNAKE, drawWidth, drawHeight)
+          snakeSprite.x = x * this.cellSize
+          snakeSprite.y = y * this.cellSize
+          snakeSprite.zIndex = 2
+          gridContainer.addChild(snakeSprite)
+          continue
+        }
+
+        const renderType = cell.type === CellType.DOOR && isDoorOverlay ? CellType.SAFE : cell.type
+        const cellSprite = this.createCellSprite(renderType)
 
         cellSprite.x = x * this.cellSize
         cellSprite.y = y * this.cellSize
+        cellSprite.zIndex = isDoorMain ? 5 : 1
 
-        if (cell.type === CellType.ENERGY && cellSprite instanceof Graphics) {
-          this.addEnergyGlow(cellSprite as Graphics)
+        if (isDoorMain) {
+          const doorSprite = new AnimatedSprite(this.doorTextures)
+          doorSprite.animationSpeed = 0.06
+          doorSprite.loop = true
+          doorSprite.play()
+          doorSprite.width = this.cellSize * 2
+          doorSprite.height = this.cellSize * 2
+          doorSprite.x = x * this.cellSize
+          doorSprite.y = y * this.cellSize
+          doorSprite.zIndex = 6
+          doorSprite.anchor.set(0, 0)
+          doorOverlaySprites.push(doorSprite)
+        } else if (cell.type === CellType.DOOR && isDoorOverlay) {
+          cellSprite.zIndex = 4
         }
 
         gridContainer.addChild(cellSprite)
       }
     }
 
+    doorOverlaySprites.forEach(sprite => {
+      gridContainer.addChild(sprite)
+    })
+
+    gridContainer.sortChildren()
+
+    this.ninjaEnergized = false
     this.setNinjaPosition(level.startPosition.x, level.startPosition.y)
     this.updateGuideOverlay(level)
-  }
-
-  private addEnergyGlow(graphics: Graphics): void {
-    graphics.stroke({ color: 0xfbbf24, width: 2, alpha: 0.8 }).circle(this.cellSize / 2, this.cellSize / 2, this.cellSize / 2 - 2).stroke()
+    this.updateNinjaAnimationState()
   }
 
   private updateGuideOverlay(level: GameLevel, pathOverride?: { x: number; y: number }[]): void {
@@ -948,9 +1465,6 @@ export class GameEngine {
   }
 
   public setNinjaPosition(x: number, y: number): void {
-    this.currentNinjaX = x
-    this.currentNinjaY = y
-
     const native = this.nativeRenderer
     if (native) {
       native.setNinjaPosition(x, y)
@@ -966,7 +1480,8 @@ export class GameEngine {
 
   public async animateNinjaMovement(fromX: number, fromY: number, toX: number, toY: number): Promise<void> {
     await this.ensureSpineNinja()
-    this.playNinjaAnimation('walk', true)
+    const animation = this.ninjaEnergized ? 'hoverboard' : 'walk'
+    this.playNinjaAnimation(animation, true)
 
     return new Promise((resolve) => {
       const ninjaSprite = this.ninjaSprite
@@ -978,7 +1493,7 @@ export class GameEngine {
         duration: 0.3,
         ease: 'power2.inOut',
         onComplete: () => {
-          this.playNinjaAnimation('idle', true)
+          this.updateNinjaAnimationState()
           resolve()
         },
       })
@@ -990,10 +1505,12 @@ export class GameEngine {
     const native = this.nativeRenderer
     if (native) {
       native.animateEnergyCollection()
+      this.ninjaEnergized = true
       return
     }
 
     void this.ensureSpineNinja()
+    this.ninjaEnergized = true
     this.playNinjaAnimation('hoverboard', true, true)
 
     this.createEnergyEffects()
@@ -1009,10 +1526,9 @@ export class GameEngine {
       ease: 'power2.inOut',
       onComplete: () => {
         ninjaSprite.alpha = 1
+        this.updateNinjaAnimationState()
       },
     })
-
-    gsap.delayedCall(1, () => this.playNinjaAnimation('idle', true))
   }
 
   private createEnergyEffects(): void {
@@ -1046,32 +1562,6 @@ export class GameEngine {
     }
   }
 
-  private createEnergyRays(): void {
-    const gameContainer = this.gameContainer
-    const ninjaSprite = this.ninjaSprite
-    if (!gameContainer || !ninjaSprite) return
-
-    for (let i = 0; i < 8; i++) {
-      const ray = new Graphics()
-      ray.stroke({ color: 0xfbbf24, width: 3, alpha: 0.8 }).moveTo(Math.cos((i / 8) * Math.PI * 2) * 20, Math.sin((i / 8) * Math.PI * 2) * 20).lineTo(Math.cos((i / 8) * Math.PI * 2) * 35, Math.sin((i / 8) * Math.PI * 2) * 35).stroke()
-
-      ray.x = ninjaSprite.x
-      ray.y = ninjaSprite.y
-
-      gameContainer.addChild(ray)
-
-      gsap.to(ray, {
-        rotation: Math.PI * 2,
-        alpha: 0,
-        duration: 1,
-        ease: 'power2.out',
-        onComplete: () => {
-          gameContainer.removeChild(ray)
-        },
-      })
-    }
-  }
-
   public animateFailure(type: 'void' | 'snake'): Promise<void> {
     const native = this.nativeRenderer
     if (native) {
@@ -1079,6 +1569,7 @@ export class GameEngine {
     }
 
     void this.ensureSpineNinja()
+    this.ninjaEnergized = false
 
     const ninjaSprite = this.ninjaSprite
     if (!ninjaSprite) {
@@ -1146,6 +1637,8 @@ export class GameEngine {
     ninjaSprite.alpha = 1
     ninjaSprite.rotation = 0
     ninjaSprite.scale.set(1)
+    this.ninjaEnergized = false
+    this.updateNinjaAnimationState()
   }
 
   private createVortexEffect(): void {
@@ -1231,7 +1724,7 @@ export class GameEngine {
         ease: 'power2.out',
         onComplete: () => {
           gameContainer.removeChild(light)
-          this.playNinjaAnimation('idle', true)
+          this.updateNinjaAnimationState()
           resolve()
         },
       })
@@ -1286,5 +1779,15 @@ export class GameEngine {
     this.ninjaSprite = null
     this.ninjaSpine = null
     this.spineLoadPromise = null
+  }
+
+  private updateNinjaAnimationState(): void {
+    const native = this.nativeRenderer
+    if (native) {
+      return
+    }
+
+    const animation = this.ninjaEnergized ? 'hoverboard' : 'idle'
+    this.playNinjaAnimation(animation, true, true)
   }
 }
