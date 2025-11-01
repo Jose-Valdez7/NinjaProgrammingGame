@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Play, Trophy, Settings, Info, BookOpen, Gamepad2 } from 'lucide-react'
+import nivelesBg from '@/assets/images/backgrounds/fondo-niveles.png'
+import katanaImg from '@/assets/images/icons/katanas.png'
 import { useState, useEffect, useCallback } from 'react'
 import { useGameStore } from '../store/GameStore'
 import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
@@ -132,7 +134,7 @@ export default function HomePage() {
         <div className="text-center relative z-10">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-400 mx-auto mb-4"></div>
           <h2 className="text-2xl font-bold text-white mb-2 font-stick">Cargando Historia...</h2>
-          <p className="text-gray-300 font-japanese">Preparando la aventura de Jason</p>
+          <p className="text-gray-300 font-japanese">Preparando la aventura de JSON</p>
         </div>
       </div>
     );
@@ -221,60 +223,89 @@ export default function HomePage() {
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setShowLevels(false)}
             ></div>
-            <div className="relative z-10 w-full max-w-xl mx-4 bg-black/40 border border-white/10 rounded-xl p-6 font-stick">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl sm:text-2xl font-semibold text-white">15 Niveles de Desafío</h2>
-                <button 
-                  onClick={() => setShowLevels(false)}
-                  className="text-white/80 hover:text-white transition-colors px-3 py-1 rounded"
-                >
-                  Cerrar
-                </button>
-              </div>
-              <div className="grid grid-cols-5 gap-2 max-w-md mx-auto">
-                {Array.from({ length: 15 }, (_, i) => {
-                  const levelNumber = i + 1
-                  const isCompleted = levelNumber <= maxLevelCompleted
-                  const difficultyClass = i < 5 ? 'bg-green-600' : i < 10 ? 'bg-yellow-600' : 'bg-red-600'
-                  const completedClasses = 'bg-gray-600 text-gray-200 border border-white/20 ring-2 ring-white/10 shadow-inner'
-
-                  return (
-                    <div 
-                      key={levelNumber}
-                      className={`
-                        w-12 h-12 rounded-lg flex items-center justify-center font-bold font-stick text-sm transition-all duration-300
-                        ${isCompleted ? completedClasses : `${difficultyClass} text-white`}
-                      `}
-                    >
-                      {levelNumber}
-                    </div>
-                  )
-                })}
-              </div>
-              {isLoadingProgress && (
-                <p className="text-sm text-gray-300 mt-4">Cargando progreso...</p>
-              )}
-              {!isLoadingProgress && progressError && (
-                <p className="text-sm text-red-400 mt-4">{progressError}</p>
-              )}
-              {!isLoadingProgress && !progressError && currentUser && (
-                <p className="text-sm text-gray-300 mt-4">Niveles completados: {maxLevelCompleted}</p>
-              )}
-              {!currentUser && (
-                <p className="text-sm text-gray-300 mt-4">Inicia sesión para guardar tu progreso.</p>
-              )}
-              <div className="flex justify-center gap-8 mt-4 text-xs sm:text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-green-600 rounded"></div>
-                  <span className="text-gray-300">Fácil (1-5)</span>
+            <div
+              className="relative z-10 w-full max-w-6xl mx-4 border border-white/10 rounded-3xl p-12 font-stick overflow-hidden"
+            >
+              <div
+                className="absolute inset-0 bg-center bg-cover blur-md scale-105"
+                style={{ backgroundImage: `url(${nivelesBg})` }}
+                aria-hidden
+              />
+              <div className="absolute inset-0 bg-black/50" />
+              <div className="relative">
+                <div className="flex items-center justify-between mb-10">
+                  <h2 className="text-4xl sm:text-5xl font-semibold text-white">15 Niveles de Desafío</h2>
+                  <button 
+                    onClick={() => setShowLevels(false)}
+                    className="text-white/80 hover:text-white transition-colors px-6 py-3 rounded-xl text-lg"
+                  >
+                    Cerrar
+                  </button>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-yellow-600 rounded"></div>
-                  <span className="text-gray-300">Medio (6-10)</span>
+                <div className="grid grid-cols-5 gap-6 max-w-4xl mx-auto">
+                  {Array.from({ length: 15 }, (_, i) => {
+                    const levelNum = i + 1
+                    // Si no hay progreso (0), solo el nivel 1 está desbloqueado
+                    // Si hay progreso, los niveles hasta maxLevelCompleted + 1 están desbloqueados
+                    const isUnlocked = maxLevelCompleted === 0 ? levelNum === 1 : levelNum <= maxLevelCompleted + 1
+                    const isCompleted = levelNum <= maxLevelCompleted
+                    const difficultyClass = i < 5 ? 'bg-green-600 hover:bg-green-700' : i < 10 ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-red-600 hover:bg-red-700'
+                    
+                    if (isUnlocked) {
+                      return (
+                        <Link
+                          key={levelNum}
+                          to="/game"
+                          className={`w-24 h-24 rounded-3xl flex items-center justify-center font-bold font-stick text-white text-xl transition-colors ${
+                            isCompleted ? 'bg-gray-600 border-2 border-white/30 ring-2 ring-white/20' : difficultyClass
+                          }`}
+                          title={isCompleted ? `Nivel ${levelNum} completado` : `Jugar nivel ${levelNum}`}
+                        >
+                          {levelNum}
+                        </Link>
+                      )
+                    }
+                    return (
+                      <div
+                        key={levelNum}
+                        className="w-24 h-24 rounded-3xl relative flex items-center justify-center font-bold font-stick bg-gray-700/70 text-white/70 text-xl cursor-not-allowed select-none border border-white/10"
+                        title="Bloqueado"
+                        aria-label={`Nivel ${levelNum} bloqueado`}
+                      >
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+                          <img src={katanaImg} alt="katanas" aria-hidden className="w-14 h-14 sm:w-16 sm:h-16 opacity-90" />
+                        </div>
+                        {levelNum}
+                      </div>
+                    )
+                  })}
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-red-600 rounded"></div>
-                  <span className="text-gray-300">Difícil (11-15)</span>
+                {isLoadingProgress && (
+                  <p className="text-center text-lg text-gray-300 mt-6">Cargando progreso...</p>
+                )}
+                {!isLoadingProgress && progressError && (
+                  <p className="text-center text-lg text-red-400 mt-6">{progressError}</p>
+                )}
+                {!isLoadingProgress && !progressError && currentUser && (
+                  <p className="text-center text-lg text-gray-300 mt-6">Niveles completados: {maxLevelCompleted}</p>
+                )}
+                {!currentUser && (
+                  <p className="text-center text-lg text-gray-300 mt-6">Inicia sesión para guardar tu progreso.</p>
+                )}
+                <div className="border-t border-white/10 my-8"></div>
+                <div className="flex justify-center gap-14 mt-10 text-lg sm:text-xl">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-green-600 rounded"></div>
+                    <span className="text-gray-300">Fácil (1-5)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-yellow-600 rounded"></div>
+                    <span className="text-gray-300">Medio (6-10)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-red-600 rounded"></div>
+                    <span className="text-gray-300">Difícil (11-15)</span>
+                  </div>
                 </div>
               </div>
             </div>

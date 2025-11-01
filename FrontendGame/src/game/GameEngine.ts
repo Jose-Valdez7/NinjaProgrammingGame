@@ -578,8 +578,18 @@ class NativeCanvasRenderer {
 
     if (!cache) {
       cache = new Image()
+      cache.crossOrigin = 'anonymous'
+      cache.onload = () => {
+        // Forzar re-render cuando la imagen se carga
+        if (this.level) {
+          this.render()
+        }
+      }
+      cache.onerror = () => {
+        console.warn(`Error al cargar imagen: ${src}`)
+        // El fallback se manejará en el render cuando cache.complete sea true pero naturalWidth sea 0
+      }
       cache.src = src
-      cache.onload = () => this.render()
 
       switch (cacheKey) {
         case 'safeImage':
@@ -594,8 +604,29 @@ class NativeCanvasRenderer {
       }
     }
 
-    if (cache.complete && cache.naturalWidth > 0) {
-      this.ctx.drawImage(cache, pixelX, pixelY, width, height)
+    if (cache.complete && cache.naturalWidth > 0 && cache.naturalHeight > 0) {
+      try {
+        this.ctx.drawImage(cache, pixelX, pixelY, width, height)
+      } catch (error) {
+        console.warn(`Error al dibujar imagen ${cacheKey}:`, error)
+        // Fallback a color sólido
+        const fallbackColors: Record<string, string> = {
+          safeImage: '#22c55e',
+          voidImage: '#000000',
+          energyImage: '#fbbf24',
+        }
+        this.ctx.fillStyle = fallbackColors[cacheKey] || '#1f2937'
+        this.ctx.fillRect(pixelX, pixelY, width, height)
+      }
+    } else {
+      // Si la imagen aún no está cargada, dibujar un placeholder
+      const placeholderColors: Record<string, string> = {
+        safeImage: '#1f2937',
+        voidImage: '#0f172a',
+        energyImage: '#1f2937',
+      }
+      this.ctx.fillStyle = placeholderColors[cacheKey] || '#1f2937'
+      this.ctx.fillRect(pixelX, pixelY, width, height)
     }
   }
 
@@ -784,6 +815,7 @@ export class GameEngine {
   private ninjaSprite: Container | null = null
   private ninjaSpine: Spine | null = null
   private spineLoadPromise: Promise<void> | null = null
+  private textures: Record<string, Texture> = {}
   private readonly cellSize: number
   private readonly gridSize: number
   private ninjaEnergized = false
@@ -832,7 +864,7 @@ export class GameEngine {
         canvas: this.canvasElement,
         width,
         height,
-        background: 0x1a1a2e,
+        background: 0x22c55e,
         antialias: true,
         resolution: 1,
         powerPreference: 'high-performance',
@@ -874,6 +906,8 @@ export class GameEngine {
     this.ninjaSprite = ninjaSprite
 
     void this.ensureSpineNinja()
+    // Cargar texturas de celdas
+    void this.loadTextures()
   }
 
   private switchToNativeRenderer(): void {
@@ -886,7 +920,15 @@ export class GameEngine {
     fallbackCanvas.style.imageRendering = 'pixelated'
     fallbackCanvas.className = this.canvasElement.className
 
-    this.container.replaceChild(fallbackCanvas, this.canvasElement)
+    // Verificar si el canvas actual está en el DOM antes de reemplazarlo
+    if (this.canvasElement.parentNode === this.container) {
+      this.container.replaceChild(fallbackCanvas, this.canvasElement)
+    } else {
+      // Si el canvas no está en el DOM, limpiar el container y agregar el nuevo canvas
+      this.container.innerHTML = ''
+      this.container.appendChild(fallbackCanvas)
+    }
+    
     this.canvasElement = fallbackCanvas
 
     this.app = new NativeCanvasRenderer(this.canvasElement, this.gridSize, this.cellSize)
@@ -1123,6 +1165,13 @@ export class GameEngine {
     return this.baseTileTexturesPromise
   }
 
+  private loadTextures(): void {
+    // Iniciar la precarga de texturas de forma no bloqueante
+    void this.ensureSnakeTextures()
+    void this.ensureDoorTextures()
+    void this.ensureBaseTileTextures()
+  }
+
   public async loadLevel(level: GameLevel): Promise<void> {
     // Esperar a que el renderer esté listo
     while (!this.ready) {
@@ -1312,11 +1361,27 @@ export class GameEngine {
 
     overlay.stroke()
 
-    // Dibujar flecha en la punta
+    // Dibujar flecha en la punta directamente en el mismo Graphics (sin addChild)
     const lastPoint = this.cellCenter(path[path.length - 1])
     const prevPoint = this.cellCenter(path[path.length - 2])
-    const arrow = this.createArrow(lastPoint, prevPoint)
-    overlay.addChild(arrow)
+    const dx = lastPoint.x - prevPoint.x
+    const dy = lastPoint.y - prevPoint.y
+    const len = Math.hypot(dx, dy) || 1
+    const nx = dx / len
+    const ny = dy / len
+    const arrowLength = this.cellSize * 0.5
+    const arrowWidth = this.cellSize * 0.4
+    const baseX = lastPoint.x - nx * arrowLength
+    const baseY = lastPoint.y - ny * arrowLength
+    const leftX = baseX + (-ny) * (arrowWidth / 2)
+    const leftY = baseY + nx * (arrowWidth / 2)
+    const rightX = baseX - (-ny) * (arrowWidth / 2)
+    const rightY = baseY - nx * (arrowWidth / 2)
+    overlay.fill({ color: 0xfbbf24, alpha: 0.9 })
+      .moveTo(lastPoint.x, lastPoint.y)
+      .lineTo(leftX, leftY)
+      .lineTo(rightX, rightY)
+      .fill()
 
     overlay.visible = this.guideVisible
     overlay.zIndex = 10
