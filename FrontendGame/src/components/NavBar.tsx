@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LogIn, LogOut, Home, Trophy } from 'lucide-react'
 import { apiUrl, authStorage } from '../config/env'
+import { useGameStore } from '../store/GameStore'
 
 export default function NavBar() {
   const navigate = useNavigate()
+  const { currentUser, dispatch } = useGameStore()
   const [showAuth, setShowAuth] = useState(false)
   const [mode, setMode] = useState<'login' | 'register'>('login')
 
@@ -19,8 +21,7 @@ export default function NavBar() {
   const [lastName, setLastName] = useState('')
   const [phone, setPhone] = useState('')
 
-  const isLoggedIn = !!authStorage.getAccessToken()
-  const currentUser = authStorage.getCurrentUser()
+  const isLoggedIn = Boolean(currentUser)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,7 +44,10 @@ export default function NavBar() {
       if (!accessToken) throw new Error('Respuesta de login inválida')
       authStorage.setAccessToken(accessToken)
       if (refreshToken) authStorage.setRefreshToken(refreshToken)
-      if (data?.user) authStorage.setCurrentUser(data.user)
+      if (data?.user) {
+        authStorage.setCurrentUser(data.user)
+        dispatch({ type: 'SET_USER', payload: data.user })
+      }
       setShowAuth(false)
     } catch (err: any) {
       setError(err?.message || 'Error al iniciar sesión')
@@ -82,7 +86,10 @@ export default function NavBar() {
       if (accessToken) {
         authStorage.setAccessToken(accessToken)
         if (refreshToken) authStorage.setRefreshToken(refreshToken)
-        if (user) authStorage.setCurrentUser(user)
+        if (user) {
+          authStorage.setCurrentUser(user)
+          dispatch({ type: 'SET_USER', payload: user })
+        }
         setShowAuth(false)
       } else {
         // Registro sin login automático
@@ -108,6 +115,7 @@ export default function NavBar() {
     } catch {}
     finally {
       authStorage.clearAll()
+      dispatch({ type: 'SET_USER', payload: null })
       navigate('/')
     }
   }
