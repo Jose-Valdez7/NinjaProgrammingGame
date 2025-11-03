@@ -1377,11 +1377,12 @@ export class GameEngine {
     const leftY = baseY + nx * (arrowWidth / 2)
     const rightX = baseX - (-ny) * (arrowWidth / 2)
     const rightY = baseY - nx * (arrowWidth / 2)
-    overlay.fill({ color: 0xfbbf24, alpha: 0.9 })
+    overlay.stroke({ color: 0xfbbf24, alpha: 0.9, width: 3 })
       .moveTo(lastPoint.x, lastPoint.y)
       .lineTo(leftX, leftY)
+      .moveTo(lastPoint.x, lastPoint.y)
       .lineTo(rightX, rightY)
-      .fill()
+      .stroke()
 
     overlay.visible = this.guideVisible
     overlay.zIndex = 10

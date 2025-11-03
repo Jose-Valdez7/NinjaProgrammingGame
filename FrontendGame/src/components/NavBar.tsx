@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { LogIn, LogOut, Home, Trophy } from 'lucide-react'
 import { apiUrl, authStorage } from '../config/env'
 import { useGameStore } from '../store/GameStore'
+import { normalizeLoginError } from '../utils/errorMessages'
 
 export default function NavBar() {
   const navigate = useNavigate()
@@ -23,10 +24,26 @@ export default function NavBar() {
 
   const isLoggedIn = Boolean(currentUser)
 
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+  const isValidCedula = (value: string) => /^\d{10}$/.test(value)
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
+
+    if (!isValidEmail(email)) {
+      setError('Correo incorrecto')
+      setLoading(false)
+      return
+    }
+
+    if (!isValidCedula(cedula)) {
+      setError('Cédula incorrecta')
+      setLoading(false)
+      return
+    }
+
     try {
       const res = await fetch(apiUrl('api/auth/login'), {
         method: 'POST',
@@ -35,7 +52,7 @@ export default function NavBar() {
       })
       if (!res.ok) {
         const text = await res.text()
-        throw new Error(text || 'Credenciales inválidas')
+        throw new Error(normalizeLoginError(text))
       }
       const json = await res.json()
       const data = json?.data || {}
@@ -50,7 +67,7 @@ export default function NavBar() {
       }
       setShowAuth(false)
     } catch (err: any) {
-      setError(err?.message || 'Error al iniciar sesión')
+      setError(normalizeLoginError(err?.message))
     } finally {
       setLoading(false)
     }

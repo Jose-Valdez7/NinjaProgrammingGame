@@ -1,13 +1,16 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
+import { Link } from 'react-router-dom'
+
 import { useGameStore } from '../store/GameStore'
 import { GameEngine } from '../game/GameEngine'
 import { LevelGenerator } from '../game/LevelGenerator'
 import { CommandParser } from '../game/CommandParser'
 import { GameLevel } from '../types/game'
 import { Play, RotateCcw, Home, HelpCircle, ListChecks } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import hackerVideo from '@/assets/images/characters/video-hacker.mp4'
 import snakeGameOverVideo from '@/assets/images/gameoverscreens/Serpiente.mp4'
+import voidGameOverVideo from '@/assets/images/gameoverscreens/Ninja-void.mp4'
+import energyCutsceneVideo from '@/assets/images/gameoverscreens/ninja_energy.mp4'
 import { getAuthHeaders, apiUrl, authStorage } from '@/config/env'
 
 const safeTileImg = new URL('../assets/images/backgrounds/secure1.png', import.meta.url).href
@@ -23,6 +26,9 @@ export default function GamePage() {
   const levelGeneratorRef = useRef(new LevelGenerator())
   const commandParserRef = useRef(new CommandParser())
   const timerRef = useRef<number | null>(null)
+  const timeLimitExceededRef = useRef(false)
+  const energyVideoResolveRef = useRef<(() => void) | null>(null)
+  const hasShownEnergyCutsceneRef = useRef(false)
 
   const [commands, setCommands] = useState('')
   const [isPlaying, setIsPlaying] = useState(false)
@@ -32,11 +38,14 @@ export default function GamePage() {
   const [level, setLevel] = useState<any>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [showSnakeGameOver, setShowSnakeGameOver] = useState(false)
+  const [showVoidGameOver, setShowVoidGameOver] = useState(false)
   const [energyRemaining, setEnergyRemaining] = useState(0)
   const [maxLevelCompleted, setMaxLevelCompleted] = useState<number>(0)
   const [completedLevels, setCompletedLevels] = useState<number[]>([])
   const [showCompletedModal, setShowCompletedModal] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [showEnergyCutscene, setShowEnergyCutscene] = useState(false)
+  const [showFinalCelebration, setShowFinalCelebration] = useState(false)
 
   useEffect(() => {
     if (sessionStorage.getItem('forceGameReload') === 'true') {
@@ -166,13 +175,20 @@ export default function GamePage() {
     setCommands('')
     setShowHelp(false)
     await gameEngineRef.current?.loadLevel(newLevel)
-    gameEngineRef.current?.setGuideVisibility(Boolean(commands.trim()))
+    gameEngineRef.current?.setGuideVisibility(false)
+    gameEngineRef.current?.previewGuideForCommands([])
+    setShowEnergyCutscene(false)
+    setShowFinalCelebration(false)
+    hasShownEnergyCutsceneRef.current = false
+    energyVideoResolveRef.current = null
     gameEngineRef.current?.debugDump()
     dispatch({ type: 'SET_LEVEL', payload: newLevel })
     dispatch({ type: 'RESET_LEVEL' })
     setCommands('')
     setError('')
     setCurrentLevel(levelNumber)
+
+    timeLimitExceededRef.current = false
 
     if (levelNumber >= 6) {
       startTimer()
@@ -185,14 +201,85 @@ export default function GamePage() {
   // 🔁 Reiniciar nivel
   const resetLevel = useCallback(() => loadLevel(currentLevel), [currentLevel, loadLevel])
 
-  // 🧩 Validar y expandir comandos
-  const validateAndParseCommands = () => {
+  useEffect(() => {
+    if (!level || level.level < 11) {
+      timeLimitExceededRef.current = false
+      return
+    }
+
+    const limit = level.timeLimit
+    if (!limit) {
+      timeLimitExceededRef.current = false
+      return
+    }
+
+    if (elapsedTime >= limit && !timeLimitExceededRef.current) {
+      const handleTimeout = async () => {
+        timeLimitExceededRef.current = true
+        stopTimer()
+        setIsPlaying(false)
+        await resetLevel()
+        setError('Tiempo límite sobrepasado. ¡Vuelve a intentarlo!')
+      }
+
+      void handleTimeout()
+    }
+  }, [elapsedTime, level, resetLevel, stopTimer])
+
+  // 🧩 Validar y preparar comandos
+  const prepareCommands = () => {
     const parser = commandParserRef.current
-    const validation = parser.validateCommands(commands)
+    const trimmed = commands.trim()
+    const validation = parser.validateCommands(trimmed)
     if (!validation.isValid) throw new Error(validation.error || 'Comandos inválidos')
-    const parsed = parser.parseCommands(commands)
-    return parser.expandCommands(parsed)
+    const parsed = parser.parseCommands(trimmed)
+    const expanded = parser.expandCommands(parsed)
+    const commandCount = level && level.level >= 11 ? parsed.length : 0
+
+    return { expanded, commandCount }
   }
+
+  const postProgress = useCallback(async (payload: {
+    success: boolean
+    commandsUsed: number
+    energized: boolean
+    timeTaken: number
+    failureType?: 'void' | 'snake'
+  }) => {
+    if (!currentUser) return null
+
+    try {
+      const response = await fetch(apiUrl('api/user/progress'), {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          level: currentLevel,
+          commandsUsed: payload.commandsUsed,
+          timeTaken: payload.timeTaken,
+          energized: payload.energized,
+          success: payload.success,
+          failureType: payload.failureType,
+        }),
+      })
+
+      if (response.status === 401 || response.status === 403) {
+        handleSessionExpired()
+        return null
+      }
+
+      if (!response.ok) {
+        console.warn('No se pudo registrar el progreso del usuario')
+      }
+
+      return response
+    } catch (error) {
+      console.warn('Error enviando progreso del usuario:', error)
+      return null
+    }
+  }, [currentLevel, currentUser, handleSessionExpired])
 
   // Actualizar guía dinámica según lo escrito
   useEffect(() => {
@@ -219,17 +306,44 @@ export default function GamePage() {
   }, [commands, level])
 
   // ⚡ Ejecutar comandos
+  const handleEnergyVideoClose = useCallback(() => {
+    setShowEnergyCutscene(false)
+    if (energyVideoResolveRef.current) {
+      const resolve = energyVideoResolveRef.current
+      energyVideoResolveRef.current = null
+      resolve()
+    }
+  }, [])
+
+  const triggerEnergyCutscene = useCallback(() => {
+    if (hasShownEnergyCutsceneRef.current) {
+      return Promise.resolve()
+    }
+
+    hasShownEnergyCutsceneRef.current = true
+
+    return new Promise<void>((resolve) => {
+      energyVideoResolveRef.current = () => {
+        energyVideoResolveRef.current = null
+        resolve()
+      }
+      setShowEnergyCutscene(true)
+    })
+  }, [])
+
   const executeCommands = async () => {
     if (!gameEngineRef.current || !commands.trim() || !level) return
 
     try {
       setEnergyRemaining(level.requiredEnergy || 0)
       let remainingEnergy = level.requiredEnergy || 0
-      const expandedCommands = validateAndParseCommands()
+      const { expanded: expandedCommands, commandCount } = prepareCommands()
       setIsPlaying(true)
       setError('')
 
       let currentPos = { ...level.startPosition }
+      const gridHeight = level.grid.length
+      const gridWidth = level.grid[0]?.length ?? 0
       let isEnergized = level.requiredEnergy === 0
       const collectedEnergyCells = new Set<string>()
 
@@ -245,8 +359,8 @@ export default function GamePage() {
           }
 
           // 📏 Límites del mapa
-          if (newPos.x < 0 || newPos.x >= 15 || newPos.y < 0 || newPos.y >= 15) {
-            setError('¡El ninja se salió del mapa!')
+          if (newPos.x < 0 || newPos.x >= gridWidth || newPos.y < 0 || newPos.y >= gridHeight) {
+            setError('¡Rebasaste los límites del mapa!')
             setIsPlaying(false)
             return
           }
@@ -262,7 +376,14 @@ export default function GamePage() {
             await gameEngineRef.current.animateFailure('void')
             setError('¡Caíste al vacío! Intenta de nuevo.')
             setIsPlaying(false)
-            resetLevel()
+            await postProgress({
+              success: false,
+              commandsUsed: commandCount,
+              energized: isEnergized,
+              timeTaken: elapsedTime,
+              failureType: 'void',
+            })
+            setShowVoidGameOver(true)
             return
           }
 
@@ -270,19 +391,32 @@ export default function GamePage() {
             await gameEngineRef.current.animateFailure('snake')
             setError('¡Te mordió una serpiente! Intenta de nuevo.')
             setIsPlaying(false)
+            await postProgress({
+              success: false,
+              commandsUsed: commandCount,
+              energized: isEnergized,
+              timeTaken: elapsedTime,
+              failureType: 'snake',
+            })
             setShowSnakeGameOver(true)
             return
           }
 
           if (cell.type === 'energy') {
             const cellKey = `${newPos.x},${newPos.y}`
+            let isNewEnergyCell = false
             if (!collectedEnergyCells.has(cellKey)) {
               collectedEnergyCells.add(cellKey)
               remainingEnergy = Math.max(0, remainingEnergy - 1)
               setEnergyRemaining(remainingEnergy)
+              isNewEnergyCell = true
             }
             isEnergized = true
             gameEngineRef.current.animateEnergyCollection()
+
+            if (isNewEnergyCell) {
+              await triggerEnergyCutscene()
+            }
           }
 
           if (cell.type === 'door') {
@@ -303,30 +437,20 @@ export default function GamePage() {
             setError('')
 
             if (currentUser) {
-              const response = await fetch(apiUrl('api/user/progress'), {
-                method: 'POST',
-                headers: {
-                  ...getAuthHeaders(),
-                },
-                body: JSON.stringify({
-                  level: currentLevel,
-                  commandsUsed: level.commandsUsed ?? 0,
-                  timeTaken: elapsedTime,
-                  energized: isEnergized,
-                  success: true,
-                }),
+              const response = await postProgress({
+                success: true,
+                commandsUsed: commandCount,
+                energized: isEnergized,
+                timeTaken: elapsedTime,
               })
 
-              if (response.ok) {
+              if (response?.ok) {
                 setCompletedLevels(prev => {
                   if (prev.includes(currentLevel)) return prev
                   return [...prev, currentLevel].sort((a, b) => a - b)
                 })
                 setMaxLevelCompleted(prev => Math.max(prev, currentLevel))
-              } else if (response.status === 401 || response.status === 403) {
-                handleSessionExpired()
-                return
-              } else {
+              } else if (response) {
                 console.warn('No se pudo registrar el avance del usuario')
               }
             } else {
@@ -340,7 +464,7 @@ export default function GamePage() {
             if (currentLevel < 15) {
               setTimeout(() => loadLevel(currentLevel + 1), 2000)
             } else {
-              setError('🎉 ¡Felicidades! Completaste todos los niveles.')
+              setShowFinalCelebration(true)
             }
 
             setIsPlaying(false)
@@ -367,6 +491,8 @@ export default function GamePage() {
     allowsLoops: level.allowsLoops
   } : {}
 
+  const isAdvancedLoopLevel = Boolean(level && level.level >= 11)
+
   const showTimer = level && level.level >= 6
 
   return (
@@ -375,11 +501,10 @@ export default function GamePage() {
       <div className="bg-ninja-purple border-b border-blue-500/30 p-4">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2 text-blue-400 hover:text-blue-300">
+            <h1 className="text-xl font-bold flex items-center gap-2">
               <Home size={20} />
-              Inicio
-            </Link>
-            <h1 className="text-xl font-bold">Ninja Energy Quest</h1>
+              Ninja Energy Quest
+            </h1>
           </div>
 
           <div className="flex items-center gap-4">
@@ -548,7 +673,7 @@ export default function GamePage() {
                     </div>
                   )}
                   {levelInfo.hasGuideLines && <div className="text-yellow-400">💡 Líneas guía disponibles</div>}
-                  {levelInfo.allowsLoops && <div className="text-purple-400">🔄 Loops permitidos</div>}
+
                 </div>
               )}
             </div>
@@ -595,9 +720,24 @@ export default function GamePage() {
                   <div><strong>S[n]:</strong> Subir n pasos</div>
                   <div><strong>B[n]:</strong> Bajar n pasos</div>
                   {levelInfo.allowsLoops && (
-                    <div className="mt-3">
-                      <strong>Loops:</strong><br />
-                      <code>(D1,S1)x3</code> - Repite 3 veces
+                    <div className="mt-3 space-y-1">
+                      <strong>Loops:</strong>
+                      {isAdvancedLoopLevel && (
+                        <p className="text-xs text-purple-200">
+                          Un loop repite la secuencia entre paréntesis la cantidad indicada. Ejemplo:
+                          <code className="ml-1">(D1,S1)x3</code> ejecuta derecha y subir tres veces.
+                        </p>
+                      )}
+                      {!isAdvancedLoopLevel && (
+                        <div>
+                          <code>(D1,S1)x3</code> - Repite 3 veces
+                        </div>
+                      )}
+                      {isAdvancedLoopLevel && (
+                        <div>
+                          <code>(D1,S1)x3</code> - Repite 3 veces
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -659,6 +799,113 @@ export default function GamePage() {
             >
               Continuar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Cutscene - Energy */}
+      {showEnergyCutscene && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="relative w-full h-full max-w-4xl max-h-[90vh] flex items-center justify-center">
+            <video
+              src={energyCutsceneVideo}
+              autoPlay
+              muted
+              playsInline
+              className="w-full h-full object-contain rounded-lg"
+              onEnded={handleEnergyVideoClose}
+            />
+            <button
+              onClick={handleEnergyVideoClose}
+              className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+            >
+              Continuar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Game Over Screen - Vacío */}
+      {showVoidGameOver && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="relative w-full h-full max-w-4xl max-h-[90vh] flex items-center justify-center">
+            <video
+              src={voidGameOverVideo}
+              autoPlay
+              muted
+              playsInline
+              className="w-full h-full object-contain rounded-lg"
+              onEnded={() => {
+                setShowVoidGameOver(false)
+                resetLevel()
+              }}
+            />
+            <button
+              onClick={() => {
+                setShowVoidGameOver(false)
+                resetLevel()
+              }}
+              className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+            >
+              Continuar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showFinalCelebration && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur">
+          <div className="relative w-full max-w-3xl mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)]">
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse" />
+              <div className="absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-purple-500/40 blur-3xl animate-pulse delay-300" />
+            </div>
+
+            <div className="relative px-10 py-12 text-center space-y-6">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-white drop-shadow-lg">
+                ¡Felicidades, Ninja!
+              </h2>
+              <p className="text-lg text-emerald-200 max-w-xl mx-auto">
+                Has completado los 15 niveles del Ninja Energy Quest. Demostraste disciplina, precisión y una lógica impecable.
+              </p>
+              <div className="relative mx-auto flex flex-col items-center gap-4">
+                <div className="relative">
+                  <div className="absolute inset-0 rounded-full bg-emerald-400/40 blur-xl animate-ping" />
+                  <div className="relative flex items-center justify-center h-28 w-28 rounded-full border-4 border-emerald-300/70 bg-black/60 shadow-[0_0_25px_rgba(16,185,129,0.6)]">
+                    <span className="text-4xl">🧬</span>
+                  </div>
+                </div>
+                <p className="text-base text-purple-200 max-w-md">
+                  Tu ADN programador ha sido analizado: creatividad + lógica en perfecto equilibrio. Estás listo para retos aún mayores.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowFinalCelebration(false)
+                    void loadLevel(1)
+                  }}
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-emerald-500 text-black font-semibold shadow-lg shadow-emerald-500/40 hover:bg-emerald-400 transition-colors"
+                >
+                  Volver a practicar
+                </button>
+                <Link
+                  to="/ranking"
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/40 hover:bg-blue-400 transition-colors"
+                >
+                  Revisa tu ranking
+                </Link>
+              </div>
+
+              <button
+                onClick={() => setShowFinalCelebration(false)}
+                className="inline-flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors"
+                type="button"
+              >
+                Cerrar celebración
+              </button>
+            </div>
           </div>
         </div>
       )}

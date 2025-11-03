@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { LogIn, Home } from 'lucide-react'
 import { apiUrl, authStorage } from '../config/env'
 import { useGameStore } from '../store/GameStore'
+import { normalizeLoginError } from '../utils/errorMessages'
 
 export default function LoginPage() {
   const { dispatch } = useGameStore()
@@ -25,7 +26,9 @@ export default function LoginPage() {
 
       if (!res.ok) {
         const text = await res.text()
-        throw new Error(text || 'Credenciales inválidas')
+        setError(normalizeLoginError(text))
+        setLoading(false)
+        return
       }
 
       const json = await res.json()
