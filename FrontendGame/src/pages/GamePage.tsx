@@ -213,6 +213,10 @@ export default function GamePage() {
       setIntroTitle('Nivel 4')
       setIntroMessage('A partir de aquí debes mover al ninja usando comandos.')
       setShowIntroModal(true)
+    } else if (levelNumber === 6) {
+      setIntroTitle('Nivel 6')
+      setIntroMessage('Desde este nivel se activa el reloj. Completa los objetivos antes de que termine el tiempo.')
+      setShowIntroModal(true)
     } else {
       setShowIntroModal(false)
     }
@@ -683,30 +687,32 @@ export default function GamePage() {
         </div>
       )}
 
-      {/* Intro Modals por nivel (formato similar al de niveles completados) */}
+      {/* Intro Modals por nivel (mismo estilo que celebración final) */}
       {showIntroModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setShowIntroModal(false)}
-          />
-          <div className="relative z-10 w-full max-w-md mx-4 bg-black/60 border border-white/10 rounded-xl p-6 font-stick">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-white">{introTitle}</h2>
-              <button
-                onClick={() => setShowIntroModal(false)}
-                className="text-white/80 hover:text-white transition-colors px-3 py-1 rounded"
-              >
-                Cerrar
-              </button>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur">
+          <div className="relative w-full max-w-3xl mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)]">
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse" />
+              <div className="absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-purple-500/40 blur-3xl animate-pulse delay-300" />
             </div>
-            <p className="text-sm text-gray-200">{introMessage}</p>
-            <button
-              onClick={() => setShowIntroModal(false)}
-              className="mt-6 w-full ninja-button"
-            >
-              Entendido
-            </button>
+
+            <div className="relative px-10 py-12 text-center space-y-6">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-white drop-shadow-lg">
+                {introTitle}
+              </h2>
+              <p className="text-lg text-emerald-200 max-w-xl mx-auto">
+                {introMessage}
+              </p>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+                <button
+                  onClick={() => setShowIntroModal(false)}
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-emerald-500 text-black font-semibold shadow-lg shadow-emerald-500/40 hover:bg-emerald-400 transition-colors"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
