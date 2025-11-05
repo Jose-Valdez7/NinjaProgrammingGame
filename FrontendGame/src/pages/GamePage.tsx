@@ -37,6 +37,9 @@ export default function GamePage() {
   const [completedLevels, setCompletedLevels] = useState<number[]>([])
   const [showCompletedModal, setShowCompletedModal] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [showIntroModal, setShowIntroModal] = useState(false)
+  const [introTitle, setIntroTitle] = useState('')
+  const [introMessage, setIntroMessage] = useState('')
 
   useEffect(() => {
     if (sessionStorage.getItem('forceGameReload') === 'true') {
@@ -179,6 +182,23 @@ export default function GamePage() {
     } else {
       stopTimer()
       setElapsedTime(0)
+    }
+
+    // Mostrar modales introductorios según nivel
+    if (levelNumber === 1) {
+      setIntroTitle('Nivel 1')
+      setIntroMessage('Por ahora, juega con las flechas. Objetivo: recoge solo una energía.')
+      setShowIntroModal(true)
+    } else if (levelNumber === 2) {
+      setIntroTitle('Nivel 2')
+      setIntroMessage('Sigue con las flechas. Ahora debes recoger energía y entrar al portal.')
+      setShowIntroModal(true)
+    } else if (levelNumber === 4) {
+      setIntroTitle('Nivel 4')
+      setIntroMessage('A partir de aquí debes mover al ninja usando comandos.')
+      setShowIntroModal(true)
+    } else {
+      setShowIntroModal(false)
     }
   }, [commands, dispatch, startTimer, stopTimer])
 
@@ -449,6 +469,34 @@ export default function GamePage() {
             <p className="text-xs text-gray-300 mt-4">
               Selecciona un nivel completado para volver a practicarlo. Solo están disponibles los niveles que ya superaste.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Intro Modals por nivel (formato similar al de niveles completados) */}
+      {showIntroModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowIntroModal(false)}
+          />
+          <div className="relative z-10 w-full max-w-md mx-4 bg-black/60 border border-white/10 rounded-xl p-6 font-stick">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-white">{introTitle}</h2>
+              <button
+                onClick={() => setShowIntroModal(false)}
+                className="text-white/80 hover:text-white transition-colors px-3 py-1 rounded"
+              >
+                Cerrar
+              </button>
+            </div>
+            <p className="text-sm text-gray-200">{introMessage}</p>
+            <button
+              onClick={() => setShowIntroModal(false)}
+              className="mt-6 w-full ninja-button"
+            >
+              Entendido
+            </button>
           </div>
         </div>
       )}
