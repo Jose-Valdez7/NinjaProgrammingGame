@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { UserPlus, Home } from 'lucide-react'
-import { apiUrl, authStorage } from '../config/env'
+import { apiUrl, authStorage, getAuthHeaders } from '../config/env'
 import { useGameStore } from '../store/GameStore'
+import { flushOfflineProgress, type OfflineProgressEntry } from '../utils/offlineProgress'
 
 export default function RegisterPage() {
   const { dispatch } = useGameStore()
@@ -16,14 +17,14 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleChange = (e: any) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     })
   }
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
@@ -76,11 +77,29 @@ export default function RegisterPage() {
         authStorage.setCurrentUser(data.user)
         dispatch({ type: 'SET_USER', payload: data.user })
       }
+      // Enviar progreso offline si existe
+      await flushOfflineProgress(async (entry: OfflineProgressEntry) => {
+        return fetch(apiUrl('api/user/progress'), {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            level: entry.level,
+            timeTaken: entry.timeTaken,
+            commandsUsed: entry.moves,
+            energized: true,
+            success: true,
+          }),
+        })
+      })
       
       // Redirigir al juego después del registro exitoso
       window.location.href = '/game'
-    } catch (err: any) {
-      setError(err?.message || 'Error al registrar usuario')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al registrar usuario'
+      setError(message)
     } finally {
       setLoading(false)
     }

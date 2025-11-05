@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LogIn, LogOut, Home, Trophy } from 'lucide-react'
-import { apiUrl, authStorage } from '../config/env'
+import { apiUrl, authStorage, getAuthHeaders } from '../config/env'
 import { useGameStore } from '../store/GameStore'
+import { normalizeLoginError } from '../utils/errorMessages'
+import { flushOfflineProgress, type OfflineProgressEntry } from '../utils/offlineProgress'
 
 export default function NavBar() {
   const navigate = useNavigate()
@@ -23,10 +25,26 @@ export default function NavBar() {
 
   const isLoggedIn = Boolean(currentUser)
 
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+  const isValidCedula = (value: string) => /^\d{10}$/.test(value)
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
+
+    if (!isValidEmail(email)) {
+      setError('Correo incorrecto')
+      setLoading(false)
+      return
+    }
+
+    if (!isValidCedula(cedula)) {
+      setError('Cédula incorrecta')
+      setLoading(false)
+      return
+    }
+
     try {
       const res = await fetch(apiUrl('api/auth/login'), {
         method: 'POST',
@@ -35,7 +53,7 @@ export default function NavBar() {
       })
       if (!res.ok) {
         const text = await res.text()
-        throw new Error(text || 'Credenciales inválidas')
+        throw new Error(normalizeLoginError(text))
       }
       const json = await res.json()
       const data = json?.data || {}
@@ -48,9 +66,28 @@ export default function NavBar() {
         authStorage.setCurrentUser(data.user)
         dispatch({ type: 'SET_USER', payload: data.user })
       }
+      // Enviar progreso offline si existe
+      await flushOfflineProgress(async (entry: OfflineProgressEntry) => {
+        return fetch(apiUrl('api/user/progress'), {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            level: entry.level,
+            timeTaken: entry.timeTaken,
+            commandsUsed: entry.moves,
+            energized: true,
+            success: true,
+          }),
+        })
+      })
+
       setShowAuth(false)
-    } catch (err: any) {
-      setError(err?.message || 'Error al iniciar sesión')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : ''
+      setError(normalizeLoginError(message))
     } finally {
       setLoading(false)
     }
@@ -90,13 +127,32 @@ export default function NavBar() {
           authStorage.setCurrentUser(user)
           dispatch({ type: 'SET_USER', payload: user })
         }
+        // Enviar progreso offline si existe (si registro hace login automático)
+        await flushOfflineProgress(async (entry: OfflineProgressEntry) => {
+          return fetch(apiUrl('api/user/progress'), {
+            method: 'POST',
+            headers: {
+              ...getAuthHeaders(),
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              level: entry.level,
+              timeTaken: entry.timeTaken,
+              commandsUsed: entry.moves,
+              energized: true,
+              success: true,
+            }),
+          })
+        })
+
         setShowAuth(false)
       } else {
         // Registro sin login automático
         setMode('login')
       }
-    } catch (err: any) {
-      setError(err?.message || 'Error al registrar usuario')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al registrar usuario'
+      setError(message)
     } finally {
       setLoading(false)
     }

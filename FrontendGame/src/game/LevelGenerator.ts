@@ -96,11 +96,14 @@ export class LevelGenerator {
     },
   ]
 
+  private advancedPatternAssignments = new Map<number, PatternTemplate>()
+  private remainingAdvancedPatterns: PatternTemplate[] = []
+
   public generateLevel(levelNumber: number): GameLevel {
     const grid = this.createEmptyGrid()
     const hasGuideLines = levelNumber <= 5
-    const allowsLoops = levelNumber >= 10
-    const timeLimit = levelNumber >= 10 ? 60 - (levelNumber - 10) * 5 : undefined
+    const allowsLoops = levelNumber >= 11
+    const timeLimit = levelNumber >= 11 ? 45 : levelNumber === 10 ? 55 : undefined
 
     const requiredEnergy = this.computeRequiredEnergy(levelNumber)
     const { startPosition, doorPosition, energyPositions } =
@@ -271,7 +274,7 @@ export class LevelGenerator {
   }
 
   private generatePatternLevel(levelNumber: number, grid: Cell[][], requiredEnergy: number) {
-    const template = this.patternTemplates[Math.floor(Math.random() * this.patternTemplates.length)]
+    const template = this.selectPatternTemplate(levelNumber)
 
     const path = this.buildPatternPath(template)
     if (path.length < 2) {
@@ -325,7 +328,42 @@ export class LevelGenerator {
       }
     }
 
+    this.reinforcePatternPath(grid, path, startPosition, doorPosition, energyPositions)
+
     return { startPosition, doorPosition, energyPositions }
+  }
+
+  private selectPatternTemplate(levelNumber: number): PatternTemplate {
+    const findByName = (name: string) => this.patternTemplates.find(template => template.name === name)
+
+    if (levelNumber === 15) {
+      return findByName('wide-wave') ?? this.patternTemplates[0]
+    }
+
+    if (levelNumber === 14) {
+      return findByName('triangle') ?? this.patternTemplates[0]
+    }
+
+    if (levelNumber >= 11 && levelNumber <= 13) {
+      const assigned = this.advancedPatternAssignments.get(levelNumber)
+      if (assigned) {
+        return assigned
+      }
+
+      if (this.remainingAdvancedPatterns.length === 0) {
+        this.remainingAdvancedPatterns = this.patternTemplates.filter(template => {
+          return template.name !== 'wide-wave' && template.name !== 'triangle'
+        })
+      }
+
+      const index = Math.floor(Math.random() * this.remainingAdvancedPatterns.length)
+      const [selected] = this.remainingAdvancedPatterns.splice(index, 1)
+      const template = selected ?? this.patternTemplates[0]
+      this.advancedPatternAssignments.set(levelNumber, template)
+      return template
+    }
+
+    return this.patternTemplates[Math.floor(Math.random() * this.patternTemplates.length)]
   }
 
   private generateStartAndDoorPositions(): {
@@ -490,7 +528,9 @@ export class LevelGenerator {
     forbiddenPositions?: Set<string>
   ): void {
     const totalCells = this.gridSize * this.gridSize
-    const target = Math.ceil(totalCells * 0.2)
+    const forbiddenCount = forbiddenPositions?.size ?? 0
+    const usableCells = Math.max(totalCells - forbiddenCount, 1)
+    const target = Math.ceil(usableCells * 0.2)
     let current = this.countHazards(grid)
 
     let toggle = true
@@ -505,6 +545,39 @@ export class LevelGenerator {
       toggle = !toggle
       safetyCounter++
     }
+  }
+
+  private reinforcePatternPath(
+    grid: Cell[][],
+    path: { x: number; y: number }[],
+    startPosition: { x: number; y: number },
+    doorPosition: { x: number; y: number },
+    energyPositions: { x: number; y: number }[]
+  ): void {
+    const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
+    const doorKeys = new Set<string>()
+
+    for (let dy = 0; dy <= 1; dy++) {
+      for (let dx = 0; dx <= 1; dx++) {
+        doorKeys.add(this.positionKey({ x: doorPosition.x + dx, y: doorPosition.y + dy }))
+      }
+    }
+
+    const startKey = this.positionKey(startPosition)
+
+    path.forEach(pos => {
+      const cell = grid[pos.y]?.[pos.x]
+      if (!cell) return
+
+      const key = this.positionKey(pos)
+      cell.isPath = true
+
+      if (doorKeys.has(key) || energyKeys.has(key) || key === startKey) {
+        return
+      }
+
+      cell.type = CellType.SAFE
+    })
   }
 
   private countHazards(grid: Cell[][]): number {

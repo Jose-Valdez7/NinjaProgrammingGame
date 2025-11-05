@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class UpdateProgressDto {
   @IsInt()
@@ -18,4 +18,8 @@ export class UpdateProgressDto {
 
   @IsBoolean()
   success: boolean;
+
+  @IsOptional()
+  @IsString()
+  failureType?: 'void' | 'snake';
 }

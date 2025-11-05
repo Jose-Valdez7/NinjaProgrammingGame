@@ -1,12 +1,13 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { Users, BarChart3, Settings, Shield } from 'lucide-react'
+import { Users, BarChart3, Settings, Shield, Trash2, Search } from 'lucide-react'
 import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
- 
+
 
 export default function AdminPage() {
   type AdminUser = { id: string | number; firstName?: string; lastName?: string; email?: string }
   type PaginationMeta = { totalItems: number; totalPages: number; currentPage: number }
+  type Summary = { totalUsers: number; totalGames: number; levelsAvailable: number }
   const navigate = useNavigate()
   
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -15,17 +16,43 @@ export default function AdminPage() {
   const [limit] = useState(10)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [summary, setSummary] = useState<Summary | null>(null)
   const [showAdminModal, setShowAdminModal] = useState(false)
   const [adminEmail, setAdminEmail] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [adminLoading, setAdminLoading] = useState(false)
   const [adminError, setAdminError] = useState('')
+  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
 
-  const fetchUsers = async (p = 1) => {
+  const fetchSummary = async () => {
+    try {
+      const res = await fetch(apiUrl('api/users/summary'), {
+        headers: getAuthHeaders(),
+      })
+      if (!res.ok) return
+      const data: unknown = await res.json()
+      const parsed = data as Summary
+      if (parsed && typeof parsed === 'object') {
+        setSummary(parsed)
+      }
+    } catch {
+      // ignorar errores de resumen
+    }
+  }
+
+  const fetchUsers = async (p = 1, searchTerm = '') => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(apiUrl(`api/users?page=${p}&limit=${limit}`), {
+      const params = new URLSearchParams({
+        page: String(p),
+        limit: String(limit),
+      })
+      if (searchTerm.trim()) {
+        params.set('search', searchTerm.trim())
+      }
+      const res = await fetch(apiUrl(`api/users?${params.toString()}`), {
         headers: getAuthHeaders(),
       })
       if (!res.ok) {
@@ -42,6 +69,13 @@ export default function AdminPage() {
       const metaObj = parsed.meta
       setUsers(Array.isArray(items) ? items : [])
       setMeta(metaObj ?? null)
+      if (!summary) {
+        setSummary({
+          totalUsers: metaObj?.totalItems ?? 0,
+          totalGames: 0,
+          levelsAvailable: 15,
+        })
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error cargando usuarios'
       setError(msg)
@@ -59,9 +93,42 @@ export default function AdminPage() {
       return
     }
 
-    fetchUsers(page)
+    fetchUsers(page, search)
+    void fetchSummary()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page])
+  }, [page, search])
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    setPage(1)
+    setSearch(searchInput)
+  }
+
+  const handleClearSearch = () => {
+    setSearchInput('')
+    setSearch('')
+  }
+
+  const handleDeleteUser = async (userId: string | number) => {
+    const confirmDelete = window.confirm('¿Seguro que quieres eliminar a este usuario?')
+    if (!confirmDelete) return
+    try {
+      const res = await fetch(apiUrl(`api/users/${userId}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || 'No se pudo eliminar al usuario')
+      }
+      // refrescar datos
+      fetchUsers(page, search)
+      void fetchSummary()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error eliminando usuario'
+      setError(msg)
+    }
+  }
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -159,7 +226,7 @@ export default function AdminPage() {
               <Users className="text-blue-400" size={32} />
               <h3 className="text-xl font-semibold">Usuarios</h3>
             </div>
-            <div className="text-3xl font-bold text-green-400 mb-2">{meta?.totalItems ?? '-'}</div>
+            <div className="text-3xl font-bold text-green-400 mb-2">{summary?.totalUsers ?? meta?.totalItems ?? '-'}</div>
             <p className="text-gray-400 text-sm">Usuarios Registrados</p>
           </div>
 
@@ -168,7 +235,7 @@ export default function AdminPage() {
               <BarChart3 className="text-purple-400" size={32} />
               <h3 className="text-xl font-semibold">Partidas</h3>
             </div>
-            <div className="text-3xl font-bold text-green-400 mb-2">5,678 </div>
+            <div className="text-3xl font-bold text-green-400 mb-2">{summary?.totalGames ?? 0}</div>
             <p className="text-gray-400 text-sm">Partidas completadas</p>
           </div>
 
@@ -177,13 +244,37 @@ export default function AdminPage() {
               <Settings className="text-yellow-400" size={32} />
               <h3 className="text-xl font-semibold">Niveles</h3>
             </div>
-            <div className="text-3xl font-bold text-green-400 mb-2">15</div>
+            <div className="text-3xl font-bold text-green-400 mb-2">{summary?.levelsAvailable ?? 15}</div>
             <p className="text-gray-400 text-sm">Niveles disponibles</p>
           </div>
         </div>
 
         <div className="bg-ninja-purple rounded-lg p-6 border border-blue-500/30">
           <h2 className="text-2xl font-bold mb-6">Gestión de Usuarios</h2>
+
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+            <div className="relative flex-1">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                className="ninja-input w-full pl-10"
+                placeholder="Buscar por nombre o correo"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="submit" className="ninja-button px-4 py-2">Buscar</button>
+              <button
+                type="button"
+                className="px-4 py-2 rounded border border-gray-600 hover:bg-gray-800 disabled:opacity-50"
+                onClick={handleClearSearch}
+                disabled={!search && !searchInput}
+              >
+                Limpiar
+              </button>
+            </div>
+          </form>
 
           {loading && (
             <div className="text-center py-6 text-gray-400">Cargando usuarios...</div>
@@ -199,6 +290,7 @@ export default function AdminPage() {
                   <th className="text-left py-3 px-4">ID</th>
                   <th className="text-left py-3 px-4">Nombre</th>
                   <th className="text-left py-3 px-4">Email</th>
+                  <th className="text-left py-3 px-4">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -207,11 +299,22 @@ export default function AdminPage() {
                     <td className="py-3 px-4">#{u.id}</td>
                     <td className="py-3 px-4">{`${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || '-'}</td>
                     <td className="py-3 px-4">{u.email ?? '-'}</td>
+                    <td className="py-3 px-4">
+                      <button
+                        type="button"
+                        className="text-red-400 hover:text-red-300 flex items-center gap-2"
+                        onClick={() => handleDeleteUser(u.id)}
+                        title="Eliminar usuario"
+                      >
+                        <Trash2 size={18} />
+                        Eliminar
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {!loading && users.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-6 text-center text-gray-400">Sin usuarios</td>
+                    <td colSpan={4} className="py-6 text-center text-gray-400">Sin usuarios</td>
                   </tr>
                 )}
               </tbody>
