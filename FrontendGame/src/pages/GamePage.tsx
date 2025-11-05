@@ -598,7 +598,7 @@ export default function GamePage() {
 
   const isAdvancedLoopLevel = Boolean(level && level.level >= 11)
 
-  const showTimer = Boolean(level)
+  const showTimer = Boolean(level && level.level >= 6)
 
   return (
     <div className="min-h-screen bg-ninja-dark text-white">

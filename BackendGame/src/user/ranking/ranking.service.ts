@@ -12,15 +12,21 @@ export class RankingService {
       const limit = Math.max(1, Math.min(100, Number(pagination?.limit || 10)));
       const skip = (page - 1) * limit;
       
-      // Agregar por usuario: mejor nivel alcanzado y sumas de comandos/tiempo
-      const aggregatedByUser = await this.prisma.ranking.groupBy({
+      // 1) Mejor nivel alcanzado (sobre todos los niveles)
+      const maxLevelByUser = await this.prisma.ranking.groupBy({
         by: ['userId'],
         _max: { level: true },
+      });
+
+      // 2) Sumas de comandos/tiempo SOLO de niveles 11 a 15
+      const sumsLvl11To15 = await this.prisma.ranking.groupBy({
+        by: ['userId'],
+        where: { level: { gte: 11, lte: 15 } },
         _sum: { commandsUsed: true, timeTaken: true },
       });
 
       // Si no hay registros, devolver vacío controlado
-      if (!aggregatedByUser.length) {
+      if (!maxLevelByUser.length) {
         return {
           items: [],
           meta: {
@@ -34,7 +40,7 @@ export class RankingService {
       }
 
       // Cargar datos de usuario
-      const userIds = aggregatedByUser.map(r => r.userId);
+      const userIds = maxLevelByUser.map(r => r.userId);
       const users = await this.prisma.user.findMany({
         where: { id: { in: userIds } },
         select: { id: true, firstName: true, lastName: true, email: true, phone: true, score: true },
@@ -42,8 +48,11 @@ export class RankingService {
       const userMap = new Map(users.map(u => [u.id, u] as const));
 
       // Preparar filas combinadas
-      const combined = aggregatedByUser.map(r => {
+      const sumsMap = new Map(sumsLvl11To15.map(s => [s.userId, s] as const));
+
+      const combined = maxLevelByUser.map(r => {
         const user = userMap.get(r.userId);
+        const sums = sumsMap.get(r.userId);
         return {
           userId: r.userId,
           level: r._max.level ?? 0, // nivel en el que está
@@ -53,8 +62,8 @@ export class RankingService {
           phone: user?.phone ?? '',
           score: user?.score ?? 0,
           // totales a mostrar en el ranking
-          commandsUsed: r._sum.commandsUsed ?? 0,
-          timeTaken: r._sum.timeTaken ?? 0,
+          commandsUsed: sums?._sum.commandsUsed ?? 0,
+          timeTaken: sums?._sum.timeTaken ?? 0,
         };
       });
 
