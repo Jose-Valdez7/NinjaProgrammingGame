@@ -118,9 +118,9 @@ export class UserProgressService {
       await this.prisma.ranking.create({
         data: {
           level,
-          userId,
           commandsUsed,
           timeTaken,
+          user: { connect: { id: userId } },
         },
       });
       return;

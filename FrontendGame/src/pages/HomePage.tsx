@@ -85,8 +85,9 @@ export default function HomePage() {
 
         const data = await response.json();
         setMaxLevelCompleted(Number(data?.maxLevelCompleted ?? 0));
-      } catch (error: any) {
-        setProgressError(error?.message || 'No se pudo cargar el progreso');
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'No se pudo cargar el progreso';
+        setProgressError(message);
         setMaxLevelCompleted(0);
       } finally {
         if (showLoader) {

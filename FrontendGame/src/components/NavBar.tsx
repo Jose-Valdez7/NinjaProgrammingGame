@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LogIn, LogOut, Home, Trophy } from 'lucide-react'
-import { apiUrl, authStorage } from '../config/env'
+import { apiUrl, authStorage, getAuthHeaders } from '../config/env'
 import { useGameStore } from '../store/GameStore'
 import { normalizeLoginError } from '../utils/errorMessages'
+import { flushOfflineProgress, type OfflineProgressEntry } from '../utils/offlineProgress'
 
 export default function NavBar() {
   const navigate = useNavigate()
@@ -65,9 +66,28 @@ export default function NavBar() {
         authStorage.setCurrentUser(data.user)
         dispatch({ type: 'SET_USER', payload: data.user })
       }
+      // Enviar progreso offline si existe
+      await flushOfflineProgress(async (entry: OfflineProgressEntry) => {
+        return fetch(apiUrl('api/user/progress'), {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            level: entry.level,
+            timeTaken: entry.timeTaken,
+            commandsUsed: entry.moves,
+            energized: true,
+            success: true,
+          }),
+        })
+      })
+
       setShowAuth(false)
-    } catch (err: any) {
-      setError(normalizeLoginError(err?.message))
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : ''
+      setError(normalizeLoginError(message))
     } finally {
       setLoading(false)
     }
@@ -107,13 +127,32 @@ export default function NavBar() {
           authStorage.setCurrentUser(user)
           dispatch({ type: 'SET_USER', payload: user })
         }
+        // Enviar progreso offline si existe (si registro hace login automático)
+        await flushOfflineProgress(async (entry: OfflineProgressEntry) => {
+          return fetch(apiUrl('api/user/progress'), {
+            method: 'POST',
+            headers: {
+              ...getAuthHeaders(),
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              level: entry.level,
+              timeTaken: entry.timeTaken,
+              commandsUsed: entry.moves,
+              energized: true,
+              success: true,
+            }),
+          })
+        })
+
         setShowAuth(false)
       } else {
         // Registro sin login automático
         setMode('login')
       }
-    } catch (err: any) {
-      setError(err?.message || 'Error al registrar usuario')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al registrar usuario'
+      setError(message)
     } finally {
       setLoading(false)
     }

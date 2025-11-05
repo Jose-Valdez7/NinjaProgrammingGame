@@ -5,13 +5,14 @@ import { useGameStore } from '../store/GameStore'
 import { GameEngine } from '../game/GameEngine'
 import { LevelGenerator } from '../game/LevelGenerator'
 import { CommandParser } from '../game/CommandParser'
-import { GameLevel } from '../types/game'
+import type { GameLevel } from '../types/game'
 import { Play, RotateCcw, Home, HelpCircle, ListChecks } from 'lucide-react'
 import hackerVideo from '@/assets/images/characters/video-hacker.mp4'
 import snakeGameOverVideo from '@/assets/images/gameoverscreens/Serpiente.mp4'
 import voidGameOverVideo from '@/assets/images/gameoverscreens/Ninja-void.mp4'
 import energyCutsceneVideo from '@/assets/images/gameoverscreens/ninja_energy.mp4'
 import { getAuthHeaders, apiUrl, authStorage } from '@/config/env'
+import { addOfflineProgress } from '@/utils/offlineProgress'
 
 const safeTileImg = new URL('../assets/images/backgrounds/secure1.png', import.meta.url).href
 const energyTileImg = new URL('../assets/energy/energy1.png', import.meta.url).href
@@ -35,8 +36,9 @@ export default function GamePage() {
   const [showHelp, setShowHelp] = useState(false)
   const [error, setError] = useState('')
   const [currentLevel, setCurrentLevel] = useState(1)
-  const [level, setLevel] = useState<any>(null)
+  const [level, setLevel] = useState<GameLevel | null>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
+  const [movesCount, setMovesCount] = useState(0)
   const [showSnakeGameOver, setShowSnakeGameOver] = useState(false)
   const [showVoidGameOver, setShowVoidGameOver] = useState(false)
   const [energyRemaining, setEnergyRemaining] = useState(0)
@@ -159,9 +161,9 @@ export default function GamePage() {
     }
   }, [])
 
-  // 🧭 Protección de niveles
+  // 🧭 Protección de niveles (permitir 1-3 sin sesión, exigir desde 4)
   useEffect(() => {
-    if (currentLevel >= 2 && !currentUser) {
+    if (currentLevel >= 4 && !currentUser) {
       window.location.href = '/login'
     }
   }, [currentLevel, currentUser])
@@ -189,13 +191,10 @@ export default function GamePage() {
     setCurrentLevel(levelNumber)
 
     timeLimitExceededRef.current = false
+    setMovesCount(0)
 
-    if (levelNumber >= 6) {
-      startTimer()
-    } else {
-      stopTimer()
-      setElapsedTime(0)
-    }
+    // Iniciar contador de tiempo en todos los niveles
+    startTimer()
   }, [commands, dispatch, startTimer, stopTimer])
 
   // 🔁 Reiniciar nivel
@@ -295,11 +294,13 @@ export default function GamePage() {
 
     if (!hasCommands) {
       engine.previewGuideForCommands([])
+      setMovesCount(0)
       return
     }
 
     const parser = commandParserRef.current
     const parsed = parser.parseCommands(trimmed)
+    setMovesCount(parsed.length)
     const expanded = parser.expandCommands(parsed)
 
     engine.previewGuideForCommands(expanded)
@@ -436,6 +437,10 @@ export default function GamePage() {
             await gameEngineRef.current.animateVictory()
             setError('')
 
+            if (currentLevel <= 3) {
+              addOfflineProgress({ level: currentLevel, timeTaken: elapsedTime, moves: movesCount })
+            }
+
             if (currentUser) {
               const response = await postProgress({
                 success: true,
@@ -454,11 +459,19 @@ export default function GamePage() {
                 console.warn('No se pudo registrar el avance del usuario')
               }
             } else {
-              setTimeout(() => {
-                window.location.href = '/login?next=/game'
-              }, 1200)
-              setIsPlaying(false)
-              return
+              if (currentLevel >= 3) {
+                setTimeout(() => {
+                  window.location.href = '/login?next=/game'
+                }, 1200)
+                setIsPlaying(false)
+                return
+              }
+              // Permitir avanzar automáticamente si no hay sesión en niveles 1-2
+              if (currentLevel < 3) {
+                setTimeout(() => loadLevel(currentLevel + 1), 2000)
+                setIsPlaying(false)
+                return
+              }
             }
 
             if (currentLevel < 15) {
@@ -477,8 +490,9 @@ export default function GamePage() {
       }
 
       setIsPlaying(false)
-    } catch (err: any) {
-      setError(err.message || 'Error ejecutando comandos')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error ejecutando comandos'
+      setError(message)
       setIsPlaying(false)
     }
   }
@@ -493,7 +507,7 @@ export default function GamePage() {
 
   const isAdvancedLoopLevel = Boolean(level && level.level >= 11)
 
-  const showTimer = level && level.level >= 6
+  const showTimer = Boolean(level)
 
   return (
     <div className="min-h-screen bg-ninja-dark text-white">
@@ -665,6 +679,10 @@ export default function GamePage() {
                         <span className="text-sm text-amber-200"> / {levelInfo.totalEnergy}</span>
                       )}
                     </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-200">
+                    <span role="img" aria-label="moves">🦶</span>
+                    <span>Movimientos: <span className="font-semibold text-white">{movesCount}</span></span>
                   </div>
                   {levelInfo.timeLimit && (
                     <div className="flex items-center gap-2 text-blue-200">

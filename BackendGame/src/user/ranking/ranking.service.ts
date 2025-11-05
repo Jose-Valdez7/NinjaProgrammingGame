@@ -11,15 +11,16 @@ export class RankingService {
       const page = Math.max(1, Number(pagination?.page || 1));
       const limit = Math.max(1, Math.min(100, Number(pagination?.limit || 10)));
       const skip = (page - 1) * limit;
-
-      // Primero obtener el mejor registro de cada usuario (nivel más alto)
-      const bestUserRecords = await this.prisma.ranking.groupBy({
+      
+      // Agregar por usuario: mejor nivel alcanzado y sumas de comandos/tiempo
+      const aggregatedByUser = await this.prisma.ranking.groupBy({
         by: ['userId'],
         _max: { level: true },
+        _sum: { commandsUsed: true, timeTaken: true },
       });
 
       // Si no hay registros, devolver vacío controlado
-      if (!bestUserRecords.length) {
+      if (!aggregatedByUser.length) {
         return {
           items: [],
           meta: {
@@ -32,79 +33,48 @@ export class RankingService {
         };
       }
 
-      // Crear un mapa de userId -> mejor nivel
-      const userBestLevels = new Map<string, number>();
-      bestUserRecords.forEach(record => {
-        userBestLevels.set(record.userId, record._max.level ?? 0);
+      // Cargar datos de usuario
+      const userIds = aggregatedByUser.map(r => r.userId);
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, firstName: true, lastName: true, email: true, phone: true, score: true },
+      });
+      const userMap = new Map(users.map(u => [u.id, u] as const));
+
+      // Preparar filas combinadas
+      const combined = aggregatedByUser.map(r => {
+        const user = userMap.get(r.userId);
+        return {
+          userId: r.userId,
+          level: r._max.level ?? 0, // nivel en el que está
+          firstName: user?.firstName ?? '',
+          lastName: user?.lastName ?? '',
+          email: user?.email ?? '',
+          phone: user?.phone ?? '',
+          score: user?.score ?? 0,
+          // totales a mostrar en el ranking
+          commandsUsed: r._sum.commandsUsed ?? 0,
+          timeTaken: r._sum.timeTaken ?? 0,
+        };
       });
 
-      // Obtener todos los registros de los mejores niveles de cada usuario
-      const allBestRecords = await this.prisma.ranking.findMany({
-        where: {
-          userId: {
-            in: Array.from(userBestLevels.keys()),
-          },
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              phone: true,
-              score: true,
-            },
-          },
-        },
-      });
-
-      // Filtrar solo los registros del mejor nivel de cada usuario
-      const filteredRecords = allBestRecords.filter(record => {
-        const userBestLevel = userBestLevels.get(record.userId) ?? 0;
-        return record.level === userBestLevel;
-      });
-
-      // Ordenar por nivel, score del usuario, comandos y tiempo
-      filteredRecords.sort((a, b) => {
-        if (b.level !== a.level) {
-          return b.level - a.level;
-        }
-
-        const aScore = a.user?.score ?? 0;
-        const bScore = b.user?.score ?? 0;
-        if (bScore !== aScore) {
-          return bScore - aScore;
-        }
-
-        if (a.commandsUsed !== b.commandsUsed) {
-          return a.commandsUsed - b.commandsUsed;
-        }
-
+      // Ordenar por nivel, luego score, luego totales
+      combined.sort((a, b) => {
+        if (b.level !== a.level) return b.level - a.level;
+        if ((b.score ?? 0) !== (a.score ?? 0)) return (b.score ?? 0) - (a.score ?? 0);
+        if (a.commandsUsed !== b.commandsUsed) return a.commandsUsed - b.commandsUsed;
         return a.timeTaken - b.timeTaken;
       });
 
-      const total = filteredRecords.length;
-      const paginatedRecords = filteredRecords.slice(skip, skip + limit);
+      const total = combined.length;
+      const paginated = combined.slice(skip, skip + limit);
       const totalPages = Math.max(1, Math.ceil(total / limit));
 
-      const mappedItems = paginatedRecords.map(r => ({
-        level: r.level,
-        userId: r.userId,
-        firstName: r.user?.firstName ?? '',
-        lastName: r.user?.lastName ?? '',
-        email: r.user?.email ?? '',
-        phone: r.user?.phone ?? '',
-        score: r.user?.score ?? 0,
-        commandsUsed: r.commandsUsed,
-        timeTaken: r.timeTaken,
-      }));
-
       return {
-        items: mappedItems,
+        items: paginated,
         meta: {
           totalItems: total,
-          itemCount: mappedItems.length,
+          itemCount: paginated.length,
           perPage: limit,
           totalPages,
           currentPage: page,
