@@ -3,6 +3,7 @@ import { Play, Trophy, Settings, Info, BookOpen, Gamepad2 } from 'lucide-react'
 import nivelesBg from '@/assets/images/backgrounds/fondo-niveles.png'
 import katanaImg from '@/assets/images/icons/katanas.png'
 import { useState, useEffect } from 'react'
+import { useCallback } from 'react'
 import { useGameStore } from '../store/GameStore'
 import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
 import { StorySequence } from '../components/StorySequence'
@@ -50,18 +51,22 @@ export default function HomePage() {
     }, 1000);
   };
 
-  useEffect(() => {
-    const fetchUserProgress = async () => {
+  const loadUserProgress = useCallback(
+    async (showLoader: boolean) => {
       const token = authStorage.getAccessToken();
 
       if (!currentUser || !token) {
         setMaxLevelCompleted(0);
-        setIsLoadingProgress(false);
         setProgressError(currentUser ? 'No se encontró un token activo. Inicia sesión nuevamente.' : null);
+        if (showLoader) {
+          setIsLoadingProgress(false);
+        }
         return;
       }
 
-      setIsLoadingProgress(true);
+      if (showLoader) {
+        setIsLoadingProgress(true);
+      }
       setProgressError(null);
 
       try {
@@ -85,14 +90,30 @@ export default function HomePage() {
         setProgressError(error?.message || 'No se pudo cargar el progreso');
         setMaxLevelCompleted(0);
       } finally {
-        setIsLoadingProgress(false);
+        if (showLoader) {
+          setIsLoadingProgress(false);
+        }
       }
-    };
+    },
+    [currentUser]
+  );
 
+  useEffect(() => {
     if (showLevels) {
-      fetchUserProgress();
+      void loadUserProgress(true);
     }
-  }, [showLevels, currentUser]);
+  }, [showLevels, loadUserProgress]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setMaxLevelCompleted(0);
+      setProgressError(null);
+      setIsLoadingProgress(false);
+      return;
+    }
+
+    void loadUserProgress(false);
+  }, [currentUser, loadUserProgress]);
 
   if (showStory) {
     return <StorySequence onComplete={handleStoryComplete} autoStart={true} />;

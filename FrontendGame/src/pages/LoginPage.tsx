@@ -41,6 +41,7 @@ export default function LoginPage() {
         dispatch({ type: 'SET_USER', payload: data.user })
       }
       
+      sessionStorage.setItem('forceGameReload', 'true')
       // Redirigir al juego después del login exitoso
       window.location.href = '/game'
     } catch (err: any) {
