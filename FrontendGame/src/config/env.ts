@@ -1,6 +1,7 @@
 /**
  * Configuración centralizada de variables de entorno
  */
+import type { User } from '../types/game'
 
 export const config = {
   // URL base de la API
@@ -39,7 +40,7 @@ export const authStorage = {
     const user = localStorage.getItem(config.AUTH.CURRENT_USER_KEY)
     return user ? JSON.parse(user) : null
   },
-  setCurrentUser: (user: any) => localStorage.setItem(config.AUTH.CURRENT_USER_KEY, JSON.stringify(user)),
+  setCurrentUser: (user: User) => localStorage.setItem(config.AUTH.CURRENT_USER_KEY, JSON.stringify(user)),
   removeCurrentUser: () => localStorage.removeItem(config.AUTH.CURRENT_USER_KEY),
   
   clearAll: () => {

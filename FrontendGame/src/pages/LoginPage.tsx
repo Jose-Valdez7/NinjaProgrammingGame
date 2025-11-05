@@ -4,6 +4,7 @@ import { LogIn, Home } from 'lucide-react'
 import { apiUrl, authStorage } from '../config/env'
 import { useGameStore } from '../store/GameStore'
 import { normalizeLoginError } from '../utils/errorMessages'
+import { flushOfflineProgress, type OfflineProgressEntry, clearOfflineProgress } from '../utils/offlineProgress'
 
 export default function LoginPage() {
   const { dispatch } = useGameStore()
@@ -43,12 +44,31 @@ export default function LoginPage() {
         authStorage.setCurrentUser(data.user)
         dispatch({ type: 'SET_USER', payload: data.user })
       }
+      // Enviar progreso offline si existe
+      await flushOfflineProgress(async (entry: OfflineProgressEntry) => {
+        return fetch(apiUrl('api/user/progress'), {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            level: entry.level,
+            timeTaken: entry.timeTaken,
+            // Mapear movimientos a commandsUsed para compatibilidad backend
+            commandsUsed: entry.moves,
+            energized: true,
+            success: true,
+          }),
+        })
+      })
       
       sessionStorage.setItem('forceGameReload', 'true')
       // Redirigir al juego después del login exitoso
       window.location.href = '/game'
-    } catch (err: any) {
-      setError(err?.message || 'Error al iniciar sesión')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al iniciar sesión'
+      setError(message)
     } finally {
       setLoading(false)
     }
