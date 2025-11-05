@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react'
 import { GameState, GameLevel, User } from '../types/game'
+import { authStorage } from '../config/env'
 
 interface GameContextType {
   gameState: GameState
@@ -115,7 +116,17 @@ function gameReducer(state: GameStoreState, action: GameAction): GameStoreState 
 const GameContext = createContext<GameContextType | undefined>(undefined)
 
 export function GameProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(gameReducer, initialState)
+  const [state, dispatch] = useReducer(
+    gameReducer,
+    initialState,
+    initial => {
+      const storedUser = authStorage.getCurrentUser()
+      if (storedUser) {
+        return { ...initial, currentUser: storedUser }
+      }
+      return initial
+    }
+  )
 
   return (
     <GameContext.Provider value={{

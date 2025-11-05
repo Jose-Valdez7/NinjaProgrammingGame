@@ -1,38 +1,79 @@
+/* Importar fuentes japonesas */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;700;900&family=M+PLUS+Rounded+1c:wght@300;400;500;700;800;900&family=Yuji+Boku:wght@400&family=Stick:wght@400&display=swap');
+
+/* Importar animaciones de la historia */
+@import './styles/story-animations.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border font-stick;
   }
   body {
-    @apply bg-ninja-dark text-white font-game;
+    @apply text-white font-stick;
     margin: 0;
     padding: 0;
     overflow-x: hidden;
+    background-color: #1a1a2e;
   }
   
   html {
-    font-family: 'Orbitron', monospace;
+    font-family: 'Stick', sans-serif;
+  }
+  
+  /* Aplicar Stick a todos los elementos */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Stick', sans-serif;
+  }
+  
+  p, span, div, button, input, textarea, select {
+    font-family: 'Stick', sans-serif;
+  }
+  
+  a, li, ul, ol {
+    font-family: 'Stick', sans-serif;
   }
 }
 
 @layer components {
+  /* Fuentes japonesas */
+  .font-japanese {
+    font-family: 'Stick', sans-serif;
+  }
+  
+  .font-japanese-serif {
+    font-family: 'Stick', sans-serif;
+  }
+  
+  .font-japanese-rounded {
+    font-family: 'Stick', sans-serif;
+  }
+  
+  .font-yuji-boku {
+    font-family: 'Stick', sans-serif;
+  }
+  
+  .font-stick {
+    font-family: 'Stick', sans-serif;
+  }
+  
   .ninja-button {
     @apply bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 
            text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 
-           transform hover:scale-105 hover:shadow-lg;
+           transform hover:scale-105 hover:shadow-lg font-stick;
   }
   
   .ninja-input {
     @apply bg-ninja-purple border border-blue-500 rounded-lg px-3 py-2 text-white 
-           placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500;
+           placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-stick;
   }
   
   .game-grid-cell {
     @apply w-8 h-8 border border-gray-600 flex items-center justify-center text-xs
-           transition-all duration-200 hover:border-blue-400;
+           transition-all duration-200 hover:border-blue-400 font-stick;
   }
   
   .energy-cell {
@@ -57,5 +98,46 @@
   
   .ninja-character {
     @apply w-6 h-6 bg-indigo-600 rounded-full animate-ninja-move;
+  }
+  
+  /* Cards y elementos adicionales */
+  .card {
+    @apply font-stick;
+  }
+  
+  .card-title {
+    @apply font-stick font-bold;
+  }
+  
+  .card-content {
+    @apply font-stick;
+  }
+  
+  .btn {
+    @apply font-stick;
+  }
+  
+  .btn-primary {
+    @apply font-stick font-bold;
+  }
+  
+  .btn-secondary {
+    @apply font-stick;
+  }
+  
+  /* Fondo personalizado - Los componentes usan estilos inline para el fondo */
+  .background-overlay {
+    position: relative;
+  }
+  
+  .background-overlay::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: -1;
   }
 }

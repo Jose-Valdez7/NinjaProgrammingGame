@@ -1,43 +1,107 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { UserPlus, Home } from 'lucide-react'
+import { apiUrl, authStorage, getAuthHeaders } from '../config/env'
+import { useGameStore } from '../store/GameStore'
+import { flushOfflineProgress, type OfflineProgressEntry } from '../utils/offlineProgress'
 
 export default function RegisterPage() {
+  const { dispatch } = useGameStore()
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
-    dni: '',
-    password: '',
-    confirmPassword: ''
+    cedula: '',
   })
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleChange = (e: any) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     })
   }
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Las contraseñas no coinciden')
-      return
-    }
+    setLoading(true)
 
     try {
-      // TODO: Implement registration API call
-      console.log('Registration attempt:', formData)
+      // Agregar role por defecto como "USER" para todos los registros
+      // El backend espera valores del enum Role (probablemente: USER, ADMIN, etc.)
+      const registerData = {
+        ...formData,
+        role: 'USER'
+      }
+
+      const res = await fetch(apiUrl('api/auth/register'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(registerData),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        let errorMsg = text || 'Error al registrar usuario'
+        
+        // Intentar parsear como JSON para obtener mensaje más claro
+        try {
+          const errorJson = JSON.parse(text)
+          if (Array.isArray(errorJson.message)) {
+            // Si es un array de mensajes de validación, mostrarlos todos
+            errorMsg = errorJson.message.join(', ')
+          } else if (errorJson.message) {
+            errorMsg = errorJson.message
+          } else if (errorJson.error) {
+            errorMsg = errorJson.error
+          }
+        } catch {
+          // Si no es JSON, usar el texto tal cual
+        }
+        
+        throw new Error(errorMsg)
+      }
+
+      const json = await res.json()
+      const data = json?.data || {}
+      const accessToken = data?.accessToken
+      const refreshToken = data?.refreshToken
+      if (!accessToken) throw new Error('Respuesta de registro inválida')
+
+      authStorage.setAccessToken(accessToken)
+      if (refreshToken) authStorage.setRefreshToken(refreshToken)
+      if (data?.user) {
+        authStorage.setCurrentUser(data.user)
+        dispatch({ type: 'SET_USER', payload: data.user })
+      }
+      // Enviar progreso offline si existe
+      await flushOfflineProgress(async (entry: OfflineProgressEntry) => {
+        return fetch(apiUrl('api/user/progress'), {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            level: entry.level,
+            timeTaken: entry.timeTaken,
+            commandsUsed: entry.moves,
+            energized: true,
+            success: true,
+          }),
+        })
+      })
       
-      // Temporary redirect to login
-      window.location.href = '/login'
-    } catch (err) {
-      setError('Error al registrar usuario')
+      // Redirigir al juego después del registro exitoso
+      window.location.href = '/game'
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al registrar usuario'
+      setError(message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -113,35 +177,8 @@ export default function RegisterPage() {
               </label>
               <input
                 type="text"
-                name="dni"
-                value={formData.dni}
-                onChange={handleChange}
-                className="ninja-input w-full"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Contraseña
-              </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                className="ninja-input w-full"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Confirmar Contraseña
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
+                name="cedula"
+                value={formData.cedula}
                 onChange={handleChange}
                 className="ninja-input w-full"
                 required
@@ -154,10 +191,11 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              className="ninja-button w-full flex items-center justify-center gap-2"
+              className="ninja-button w-full flex items-center justify-center gap-2 disabled:opacity-60"
+              disabled={loading}
             >
               <UserPlus size={20} />
-              Registrarse
+              {loading ? 'Registrando...' : 'Registrarse'}
             </button>
           </form>
 

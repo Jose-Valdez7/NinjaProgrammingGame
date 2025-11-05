@@ -1,28 +1,71 @@
 import { Link } from 'react-router-dom'
-import { Home, Trophy, Clock, Code } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Trophy, Clock, Code } from 'lucide-react'
+import { apiUrl } from '../config/env'
 
 export default function RankingPage() {
-  // Mock data - replace with API call
-  const rankings = [
-    { id: 1, user: 'Juan Pérez', level: 15, time: 45, commands: 23, score: 950 },
-    { id: 2, user: 'María García', level: 12, time: 38, commands: 19, score: 920 },
-    { id: 3, user: 'Carlos López', level: 10, time: 42, commands: 25, score: 880 },
-  ]
+  type Rank = { key?: string; userId: string; user: string; level: number; time: number; commands: number; score: number; position: number }
+  type Meta = { totalItems: number; itemCount: number; perPage: number; totalPages: number; currentPage: number }
+  const [rankings, setRankings] = useState<Rank[]>([])
+  const [meta, setMeta] = useState<Meta | null>(null)
+  const [page, setPage] = useState(1)
+  const [limit] = useState(10)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchRankings = async (p = 1) => {
+    try {
+      const res = await fetch(apiUrl(`api/rankings?page=${p}&limit=${limit}`), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!res.ok) {
+        const status = res.status
+        if (status >= 500) throw new Error('No se pudo cargar el ranking. Inténtalo más tarde.')
+        if (status === 404) throw new Error('No hay resultados por ahora')
+        const text = await res.text().catch(() => '')
+        throw new Error(text || `Error ${status}`)
+      }
+
+      const data = await res.json().catch(() => null)
+      if (!data || typeof data !== 'object') {
+        setRankings([])
+        setMeta({ totalItems: 0, itemCount: 0, perPage: limit, totalPages: 1, currentPage: p })
+        return
+      }
+      // data esperado: { items, meta }
+      const mapped = (Array.isArray(data?.items) ? data.items : []).map((r: unknown, idx: number) => {
+        const row = r as { userId: string; level: number; firstName: string; lastName: string; timeTaken: number; commandsUsed: number; score: number }
+        const globalPosition = (page - 1) * limit + idx + 1
+        return {
+          key: `${row.userId}-${row.level}-${globalPosition}`,
+          userId: row.userId,
+          user: `${row.firstName} ${row.lastName}`.trim(),
+          level: row.level,
+          time: row.timeTaken,
+          commands: row.commandsUsed,
+          score: row.score,
+          position: globalPosition,
+        }
+      })
+      setRankings(mapped)
+      setMeta(data?.meta ?? null)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'No se pudo cargar el ranking. Inténtalo más tarde.'
+      setError(msg)
+      setRankings([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchRankings(page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
 
   return (
     <div className="min-h-screen bg-ninja-dark text-white">
-      <div className="bg-ninja-purple border-b border-blue-500/30 p-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2 text-blue-400 hover:text-blue-300">
-              <Home size={20} />
-              Inicio
-            </Link>
-            <h1 className="text-xl font-bold">Ranking Global</h1>
-          </div>
-        </div>
-      </div>
-
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-ninja-purple rounded-lg p-6 border border-blue-500/30">
           <div className="flex items-center gap-3 mb-6">
@@ -31,6 +74,12 @@ export default function RankingPage() {
           </div>
 
           <div className="overflow-x-auto">
+            {loading && (
+              <div className="text-center py-8 text-gray-400">Cargando ranking...</div>
+            )}
+            {error && !loading && (
+              <div className="text-center py-8 text-red-400">{error}</div>
+            )}
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-600">
@@ -43,14 +92,14 @@ export default function RankingPage() {
                 </tr>
               </thead>
               <tbody>
-                {rankings.map((rank, index) => (
-                  <tr key={rank.id} className="border-b border-gray-700 hover:bg-gray-800/50">
+                {rankings.map((rank) => (
+                  <tr key={rank.key ?? rank.position} className="border-b border-gray-700 hover:bg-gray-800/50">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        {index === 0 && <span className="text-yellow-400">🥇</span>}
-                        {index === 1 && <span className="text-gray-300">🥈</span>}
-                        {index === 2 && <span className="text-orange-400">🥉</span>}
-                        <span className="font-bold">#{index + 1}</span>
+                        {rank.position === 1 && <span className="text-yellow-400">🥇</span>}
+                        {rank.position === 2 && <span className="text-gray-300">🥈</span>}
+                        {rank.position === 3 && <span className="text-orange-400">🥉</span>}
+                        <span className="font-bold">#{rank.position}</span>
                       </div>
                     </td>
                     <td className="py-3 px-4 font-medium">{rank.user}</td>
@@ -85,6 +134,28 @@ export default function RankingPage() {
               No hay datos de ranking disponibles
             </div>
           )}
+        </div>
+
+        <div className="flex items-center justify-between mt-6">
+          <div className="text-sm text-gray-300">
+            Página {meta?.currentPage ?? page} de {meta?.totalPages ?? 1} • Total: {meta?.totalItems ?? 0}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-2 rounded border border-gray-600 hover:bg-gray-800 disabled:opacity-50"
+              disabled={loading || (meta ? page <= 1 : page <= 1)}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Anterior
+            </button>
+            <button
+              className="px-3 py-2 rounded border border-gray-600 hover:bg-gray-800 disabled:opacity-50"
+              disabled={loading || (meta ? page >= (meta.totalPages ?? 1) : false)}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
 
         <div className="mt-6 text-center">
