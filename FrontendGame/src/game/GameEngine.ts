@@ -1837,4 +1837,142 @@ export class GameEngine {
     const animation = this.ninjaEnergized ? 'hoverboard' : 'idle'
     this.playNinjaAnimation(animation, true, true)
   }
+
+  // Fuerza un redibujado del grid preservando la posición actual del ninja (solo Pixi)
+  public async refreshGridPreservePosition(): Promise<void> {
+    const app = this.pixiApp
+    if (!app) {
+      // En renderer nativo el render es inmediato, no hacemos nada
+      return
+    }
+
+    const level = this.currentLevelData
+    const gridContainer = this.gridContainer
+    const ninjaSprite = this.ninjaSprite
+    if (!level || !gridContainer || !ninjaSprite) return
+
+    // Calcular posición de celda actual del ninja
+    const currentCellX = Math.round((ninjaSprite.x - this.cellSize / 2) / this.cellSize)
+    const currentCellY = Math.round((ninjaSprite.y - this.cellSize / 2) / this.cellSize)
+
+    // Reconstruir grid (reutiliza la lógica de loadLevel sin mover al ninja)
+    gridContainer.removeChildren()
+
+    const doorOverlaySprites: AnimatedSprite[] = []
+    const processedVoidCells = new Set<string>()
+    const processedSnakeCells = new Set<string>()
+
+    for (let y = 0; y < this.gridSize; y++) {
+      for (let x = 0; x < this.gridSize; x++) {
+        const cell = level.grid[y][x]
+        const key = positionKey(x, y)
+        const isDoorMain = this.doorCoverage.mainKey === key
+        const isDoorOverlay = this.doorCoverage.overlayKeys.has(key)
+
+        if (cell.type === CellType.VOID) {
+          if (processedVoidCells.has(key)) {
+            continue
+          }
+          processedVoidCells.add(key)
+
+          let drawWidth = this.cellSize
+          let drawHeight = this.cellSize
+
+          const rightKey = positionKey(x + 1, y)
+          if (x + 1 < this.gridSize) {
+            const rightCell = level.grid[y][x + 1]
+            if (rightCell.type === CellType.VOID && !processedVoidCells.has(rightKey)) {
+              drawWidth = this.cellSize * 2
+              processedVoidCells.add(rightKey)
+            }
+          }
+
+          if (drawWidth === this.cellSize && y + 1 < this.gridSize) {
+            const bottomKey = positionKey(x, y + 1)
+            const bottomCell = level.grid[y + 1][x]
+            if (bottomCell.type === CellType.VOID && !processedVoidCells.has(bottomKey)) {
+              drawHeight = this.cellSize * 2
+              processedVoidCells.add(bottomKey)
+            }
+          }
+
+          const voidSprite = this.createCellSprite(CellType.VOID, drawWidth, drawHeight)
+          voidSprite.x = x * this.cellSize
+          voidSprite.y = y * this.cellSize
+          voidSprite.zIndex = 1
+          gridContainer.addChild(voidSprite)
+          continue
+        }
+
+        if (cell.type === CellType.SNAKE) {
+          if (processedSnakeCells.has(key)) {
+            continue
+          }
+          processedSnakeCells.add(key)
+
+          let drawWidth = this.cellSize
+          let drawHeight = this.cellSize
+
+          const rightKey = positionKey(x + 1, y)
+          if (x + 1 < this.gridSize) {
+            const rightCell = level.grid[y][x + 1]
+            if (rightCell.type === CellType.SNAKE && !processedSnakeCells.has(rightKey)) {
+              drawWidth = this.cellSize * 2
+              processedSnakeCells.add(rightKey)
+            }
+          }
+
+          if (drawWidth === this.cellSize && y + 1 < this.gridSize) {
+            const bottomKey = positionKey(x, y + 1)
+            const bottomCell = level.grid[y + 1][x]
+            if (bottomCell.type === CellType.SNAKE && !processedSnakeCells.has(bottomKey)) {
+              drawHeight = this.cellSize * 2
+              processedSnakeCells.add(bottomKey)
+            }
+          }
+
+          const snakeSprite = this.createCellSprite(CellType.SNAKE, drawWidth, drawHeight)
+          snakeSprite.x = x * this.cellSize
+          snakeSprite.y = y * this.cellSize
+          snakeSprite.zIndex = 2
+          gridContainer.addChild(snakeSprite)
+          continue
+        }
+
+        const renderType = cell.type === CellType.DOOR && isDoorOverlay ? CellType.SAFE : cell.type
+        const cellSprite = this.createCellSprite(renderType)
+        cellSprite.x = x * this.cellSize
+        cellSprite.y = y * this.cellSize
+        cellSprite.zIndex = isDoorMain ? 5 : 1
+
+        if (isDoorMain) {
+          const doorSprite = new AnimatedSprite(this.doorTextures)
+          doorSprite.animationSpeed = 0.06
+          doorSprite.loop = true
+          doorSprite.play()
+          doorSprite.width = this.cellSize * 2
+          doorSprite.height = this.cellSize * 2
+          doorSprite.x = x * this.cellSize
+          doorSprite.y = y * this.cellSize
+          doorSprite.zIndex = 6
+          doorSprite.anchor.set(0, 0)
+          doorOverlaySprites.push(doorSprite)
+        } else if (cell.type === CellType.DOOR && isDoorOverlay) {
+          cellSprite.zIndex = 4
+        }
+
+        gridContainer.addChild(cellSprite)
+      }
+    }
+
+    doorOverlaySprites.forEach(sprite => {
+      gridContainer.addChild(sprite)
+    })
+    gridContainer.sortChildren()
+
+    this.updateGuideOverlay(level)
+    // Restaurar la posición actual del ninja
+    this.setNinjaPosition(currentCellX, currentCellY)
+    this.updateNinjaAnimationState()
+  }
 }

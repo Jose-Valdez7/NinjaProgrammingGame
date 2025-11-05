@@ -201,6 +201,45 @@ export default function GamePage() {
   // 🔁 Reiniciar nivel
   const resetLevel = useCallback(() => loadLevel(currentLevel), [currentLevel, loadLevel])
 
+  // ⌨️ Registro de comandos con flechas (niveles 1-3)
+  useEffect(() => {
+    const shouldUseArrows = Boolean(level && level.level <= 3)
+    if (!shouldUseArrows) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isPlaying) return
+      const map: Record<string, 'D' | 'I' | 'S' | 'B'> = {
+        ArrowRight: 'D',
+        ArrowLeft: 'I',
+        ArrowUp: 'S',
+        ArrowDown: 'B',
+      }
+      const dir = map[e.key]
+      if (!dir) return
+      e.preventDefault()
+
+      setCommands(prev => {
+        const trimmed = prev.trim()
+        if (!trimmed) return `${dir}1`
+
+        const parts = trimmed.split(',')
+        const last = parts[parts.length - 1]
+        const match = /^([DISB])(\d+)$/.exec(last)
+        if (match && match[1] === dir) {
+          const nextCount = String(Number(match[2]) + 1)
+          parts[parts.length - 1] = `${dir}${nextCount}`
+          return parts.join(',')
+        }
+        return `${trimmed.replace(/\s+/g, '')},${dir}1`
+      })
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [level, isPlaying])
+
   useEffect(() => {
     if (!level || level.level < 11) {
       timeLimitExceededRef.current = false
@@ -416,6 +455,37 @@ export default function GamePage() {
 
             if (isNewEnergyCell) {
               await triggerEnergyCutscene()
+
+              // 🎯 Nivel 1: objetivo es llegar a la energía (pasar directo al nivel 2)
+              if (level.level === 1) {
+                stopTimer()
+                await gameEngineRef.current.animateVictory()
+                setError('')
+
+                if (currentUser) {
+                  const response = await postProgress({
+                    success: true,
+                    commandsUsed: 0,
+                    energized: true,
+                    timeTaken: elapsedTime,
+                  })
+
+                  if (response?.ok) {
+                    setCompletedLevels(prev => {
+                      if (prev.includes(1)) return prev
+                      return [...prev, 1].sort((a, b) => a - b)
+                    })
+                    setMaxLevelCompleted(prev => Math.max(prev, 1))
+                  }
+                }
+
+                if (currentLevel < 15) {
+                  setTimeout(() => loadLevel(2), 1200)
+                }
+
+                setIsPlaying(false)
+                return
+              }
             }
           }
 
@@ -695,7 +765,7 @@ export default function GamePage() {
                 onChange={(e) => setCommands(e.target.value)}
                 placeholder="Ej: D3,S2,I1"
                 className="ninja-input w-full h-24 resize-none"
-                disabled={isPlaying}
+                disabled={isPlaying || Boolean(level && level.level <= 3)}
               />
 
               {error && <div className="mt-2 text-red-400 text-sm">{error}</div>}
