@@ -2,19 +2,58 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 
 // Función para importar createApp de forma lazy
 function getCreateApp() {
+  const fs = require('fs');
+  const path = require('path');
+  
+  // Determinar la ruta base
+  const currentDir = __dirname; // /var/task/BackendGame/api
+  const baseDir = path.dirname(currentDir); // /var/task/BackendGame
+  
+  console.log('📁 Current directory:', currentDir);
+  console.log('📁 Base directory:', baseDir);
+  
+  // Intentar diferentes rutas posibles
+  const possiblePaths = [
+    path.join(baseDir, 'dist', 'main'),
+    path.join(baseDir, 'BackendGame', 'dist', 'main'),
+    path.join(baseDir, 'src', 'main'),
+    path.join(baseDir, 'BackendGame', 'src', 'main'),
+    '../dist/main',
+    '../src/main',
+  ];
+  
+  for (const tryPath of possiblePaths) {
+    try {
+      console.log(`🔍 Trying to import from: ${tryPath}`);
+      const resolvedPath = path.isAbsolute(tryPath) ? tryPath : path.resolve(currentDir, tryPath);
+      
+      // Verificar si el archivo existe
+      if (fs.existsSync(resolvedPath + '.js') || fs.existsSync(resolvedPath + '.ts')) {
+        const module = require(tryPath);
+        if (module && module.createApp) {
+          console.log(`✅ Successfully imported from: ${tryPath}`);
+          return module.createApp;
+        }
+      }
+    } catch (err: any) {
+      // Continuar con el siguiente path
+      continue;
+    }
+  }
+  
+  // Si ninguna ruta funcionó, intentar las rutas originales y mostrar error detallado
   try {
-    // En producción, el código está compilado en dist/
     return require('../dist/main').createApp;
   } catch (distError: any) {
-    console.warn('⚠️ Failed to import from dist, trying src:', distError.message);
+    console.warn('⚠️ Failed to import from dist:', distError.message);
     try {
-      // Fallback a src en desarrollo
       return require('../src/main').createApp;
     } catch (srcError: any) {
-      console.error('❌ Failed to import createApp from both dist and src');
+      console.error('❌ Failed to import createApp from all possible paths');
+      console.error('Tried paths:', possiblePaths);
       console.error('Dist error:', distError.message);
       console.error('Src error:', srcError.message);
-      throw new Error(`Cannot import createApp: ${srcError.message}`);
+      throw new Error(`Cannot import createApp. Last error: ${srcError.message}`);
     }
   }
 }

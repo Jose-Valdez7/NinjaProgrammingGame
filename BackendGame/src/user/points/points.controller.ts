@@ -1,13 +1,13 @@
 import { Body, Controller, Post, UseGuards, ForbiddenException } from '@nestjs/common';
 import { PointsService } from './points.service';
-import { Roles } from '@/shared/auth/decorators/roles.decorator';
-import { Role } from '@/shared/auth/enums/role.enums';
-import { AuthGuard } from '@/shared/auth/guards/auth.guard';
-import { RolesGuard } from '@/shared/auth/guards/roles.guard';
+import { Roles } from '../../shared/auth/decorators/roles.decorator';
+import { Role } from '../../shared/auth/enums/role.enums';
+import { AuthGuard } from '../../shared/auth/guards/auth.guard';
+import { RolesGuard } from '../../shared/auth/guards/roles.guard';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AssingPointsDto } from './dto/points.dto';
-import { User } from '@/shared/auth/decorators/user.decorator';
-import type { CurrentUser } from '@/shared/auth/interface/current-user.interfaces';
+import { User } from '../../shared/auth/decorators/user.decorator';
+import type { CurrentUser } from '../../shared/auth/interface/current-user.interfaces';
 
 @Controller('points')
 @ApiTags('Points')

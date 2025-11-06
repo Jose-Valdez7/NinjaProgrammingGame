@@ -1,11 +1,11 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { AuthGuard } from '@/shared/auth/guards/auth.guard';
-import { RolesGuard } from '@/shared/auth/guards/roles.guard';
-import { Roles } from '@/shared/auth/decorators/roles.decorator';
-import { Role } from '@/shared/auth/enums/role.enums';
-import { User } from '@/shared/auth/decorators/user.decorator';
-import type { CurrentUser } from '@/shared/auth/interface/current-user.interfaces';
+import { AuthGuard } from '../../shared/auth/guards/auth.guard';
+import { RolesGuard } from '../../shared/auth/guards/roles.guard';
+import { Roles } from '../../shared/auth/decorators/roles.decorator';
+import { Role } from '../../shared/auth/enums/role.enums';
+import { User } from '../../shared/auth/decorators/user.decorator';
+import type { CurrentUser } from '../../shared/auth/interface/current-user.interfaces';
 import { UserProgressService } from './progress.service';
 import { UpdateProgressDto } from './dto/update-progress.dto';
 
