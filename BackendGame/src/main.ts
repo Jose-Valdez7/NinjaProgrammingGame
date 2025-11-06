@@ -9,11 +9,38 @@ export async function createApp() {
 
   const configService = app.get(ConfigService);
   const frontendUrl = configService.get('FRONTEND_URL') || 'http://localhost:3000';
+  const nodeEnv = configService.get('NODE_ENV') || 'development';
+  const allowedOrigins = configService.get('ALLOWED_ORIGINS');
 
   // Enable CORS
+  let corsOrigin: string | boolean | string[] = true;
+  
+  if (nodeEnv === 'production') {
+    // En producción, usar FRONTEND_URL o ALLOWED_ORIGINS
+    if (allowedOrigins) {
+      corsOrigin = allowedOrigins.split(',').map(origin => origin.trim());
+    } else if (frontendUrl) {
+      corsOrigin = frontendUrl;
+    }
+  } else {
+    // En desarrollo, permitir localhost y otros orígenes comunes
+    corsOrigin = [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5173',
+    ];
+    if (allowedOrigins) {
+      const additionalOrigins = allowedOrigins.split(',').map(origin => origin.trim());
+      corsOrigin = [...(corsOrigin as string[]), ...additionalOrigins];
+    }
+  }
+
   app.enableCors({
-    origin: frontendUrl,
+    origin: corsOrigin,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
   // Global validation pipe

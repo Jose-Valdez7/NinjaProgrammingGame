@@ -1,15 +1,9 @@
 {
   "version": 2,
   "builds": [
-    {
-      "src": "BackendGame/package.json",
-      "use": "@vercel/node"
-    }
+    { "src": "vercel.ts", "use": "@vercel/node" }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "BackendGame/dist/main.js"
-    }
+    { "src": "/(.*)", "dest": "vercel.ts" }
   ]
 }

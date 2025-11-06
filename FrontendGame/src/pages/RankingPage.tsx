@@ -15,8 +15,17 @@ export default function RankingPage() {
 
   const fetchRankings = async (p = 1) => {
     try {
-      const res = await fetch(apiUrl(`api/rankings?page=${p}&limit=${limit}`), {
+      setError(null)
+      const url = apiUrl(`api/rankings?page=${p}&limit=${limit}`)
+      
+      const res = await fetch(url, {
         headers: { 'Content-Type': 'application/json' },
+      }).catch((fetchError) => {
+        // Capturar errores de red (CORS, conexión, etc.)
+        if (fetchError instanceof TypeError && fetchError.message.includes('fetch')) {
+          throw new Error('No se pudo conectar con el servidor. Verifica que el backend esté corriendo en http://localhost:3001')
+        }
+        throw fetchError
       })
 
       if (!res.ok) {
@@ -54,6 +63,7 @@ export default function RankingPage() {
       const msg = e instanceof Error ? e.message : 'No se pudo cargar el ranking. Inténtalo más tarde.'
       setError(msg)
       setRankings([])
+      console.error('Error fetching rankings:', e)
     } finally {
       setLoading(false)
     }
