@@ -12,20 +12,36 @@ export async function createApp() {
   const nodeEnv = configService.get('NODE_ENV') || 'development';
   const allowedOrigins = configService.get('ALLOWED_ORIGINS');
 
+  // Función para validar si un origen es de Vercel
+  const isVercelOrigin = (origin: string | undefined): boolean => {
+    if (!origin) return false;
+    return origin.includes('.vercel.app') || origin.includes('localhost');
+  };
+  
   // Enable CORS
-  let corsOrigin: string | boolean | string[] = true;
+  let corsOrigin: string | boolean | string[] | ((origin: string | undefined) => boolean) = true;
   
   if (nodeEnv === 'production') {
-    // En producción, usar FRONTEND_URL o ALLOWED_ORIGINS
+    // En producción, usar función de validación que permita Vercel
     if (allowedOrigins) {
-      corsOrigin = allowedOrigins.split(',').map(origin => origin.trim());
+      const configuredOrigins = allowedOrigins.split(',').map(origin => origin.trim());
+      corsOrigin = (origin: string | undefined) => {
+        if (!origin) return false;
+        // Permitir orígenes configurados o cualquier URL de Vercel
+        return configuredOrigins.includes(origin) || isVercelOrigin(origin);
+      };
     } else if (frontendUrl) {
-      corsOrigin = frontendUrl;
+      corsOrigin = (origin: string | undefined) => {
+        if (!origin) return false;
+        // Permitir FRONTEND_URL o cualquier URL de Vercel
+        return origin === frontendUrl || isVercelOrigin(origin);
+      };
     } else {
-      // Si no hay configuración, permitir todos los orígenes en producción (temporal)
-      // TODO: Configurar FRONTEND_URL o ALLOWED_ORIGINS en Vercel
-      corsOrigin = true;
-      console.warn('⚠️ No FRONTEND_URL or ALLOWED_ORIGINS configured, allowing all origins');
+      // Si no hay configuración, permitir todos los orígenes de Vercel
+      corsOrigin = (origin: string | undefined) => {
+        return isVercelOrigin(origin);
+      };
+      console.warn('⚠️ No FRONTEND_URL or ALLOWED_ORIGINS configured, allowing all Vercel origins');
     }
   } else {
     // En desarrollo, permitir localhost y otros orígenes comunes
