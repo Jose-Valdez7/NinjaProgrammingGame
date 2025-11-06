@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "projects": [
+  "builds": [
     {
       "src": "FrontendGame/package.json",
       "use": "@vercel/static-build",
@@ -9,13 +9,10 @@
       }
     }
   ],
-  "builds": [
-    {
-      "src": "FrontendGame/package.json",
-      "use": "@vercel/static-build"
-    }
-  ],
   "routes": [
-    { "src": "/(.*)", "dest": "FrontendGame/dist/$1" }
+    {
+      "src": "/(.*)",
+      "dest": "FrontendGame/dist/$1"
+    }
   ]
 }
