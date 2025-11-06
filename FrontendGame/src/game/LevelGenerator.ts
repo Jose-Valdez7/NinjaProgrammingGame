@@ -103,7 +103,7 @@ export class LevelGenerator {
     const grid = this.createEmptyGrid()
     const hasGuideLines = levelNumber <= 5
     const allowsLoops = levelNumber >= 11
-    const timeLimit = levelNumber >= 11 ? 45 : levelNumber === 10 ? 55 : undefined
+    const timeLimit = levelNumber >= 11 ? 60 : levelNumber === 10 ? 75 : undefined
 
     const requiredEnergy = this.computeRequiredEnergy(levelNumber)
     const { startPosition, doorPosition, energyPositions } =

@@ -154,6 +154,33 @@ export default function HomePage() {
     >
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm z-0"></div>
       <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
+        {/* Hero Title */}
+        <style>{`
+          @keyframes shine {
+            0% { transform: translateX(-120%); opacity: .25; }
+            50% { opacity: .7; }
+            100% { transform: translateX(120%); opacity: .25; }
+          }
+        `}</style>
+        <div className="mb-6">
+          <div className="relative inline-block">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight" style={{ textShadow: '0 0 28px rgba(34,211,238,0.45), 0 0 52px rgba(244,63,94,0.35)' }}>
+              <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-emerald-300 bg-clip-text text-transparent">
+                Descubre tu gen programador
+              </span>
+            </h1>
+            {/* Barra de brillo animado sobre el título */}
+            <div className="pointer-events-none absolute -inset-x-16 -inset-y-2 bg-gradient-to-r from-transparent via-cyan-200/90 to-transparent blur-xl opacity-80" style={{ animation: 'shine 3s linear infinite' }} />
+          </div>
+          <p className="mt-2 text-sm sm:text-base text-emerald-200/90">
+            Una aventura para despertar tu lógica y dominar el código
+          </p>
+          {/* Subrayado con brillo y animación */}
+          <div className="relative mx-auto mt-4 h-[3px] w-48 sm:w-64">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-fuchsia-400 to-transparent blur-[1.5px] opacity-90" />
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-200/90 to-transparent opacity-70" style={{ animation: 'shine 2.6s linear infinite' }} />
+          </div>
+        </div>
         {/* Logo */}
         <div className="mb-12">
           <img src={logo} alt="Ninja 404 Logo" className="mx-auto h-80 w-auto mb-4 drop-shadow-[0_0_12px_rgba(0,0,0,0.6)]" />

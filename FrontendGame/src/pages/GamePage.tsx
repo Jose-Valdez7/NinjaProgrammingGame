@@ -660,7 +660,7 @@ export default function GamePage() {
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold flex items-center gap-2">
               <Home size={20} />
-              Ninja Energy Quest
+              Ninja 404 Quest
             </h1>
           </div>
 
