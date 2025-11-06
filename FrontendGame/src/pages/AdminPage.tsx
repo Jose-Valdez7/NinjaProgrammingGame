@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Users, BarChart3, Settings, Shield, Trash2, Search } from 'lucide-react'
 import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
+import type { User } from '../types/game'
 
 
 export default function AdminPage() {
@@ -194,15 +195,22 @@ export default function AdminPage() {
       const parsed = json as { data?: { accessToken?: string; refreshToken?: string; user?: unknown } }
       const accessToken = parsed.data?.accessToken
       const refreshToken = parsed.data?.refreshToken
-      const adminUser = parsed.data?.user
+      const adminUser = parsed.data?.user as AdminUser
       if (!accessToken || !adminUser) throw new Error('Respuesta de admin inválida')
 
       // Limpiar credenciales de usuario y establecer las de admin
       authStorage.clearAll()
       authStorage.setAccessToken(accessToken)
       if (refreshToken) authStorage.setRefreshToken(refreshToken)
-      // El adminUser debe tener la estructura de User
-      authStorage.setCurrentUser(adminUser as AdminUser & { createdAt: string })
+      // Convertir AdminUser a User (asegurando que id sea number)
+      const user: User = {
+        id: typeof adminUser.id === 'string' ? parseInt(adminUser.id, 10) : adminUser.id,
+        firstName: adminUser.firstName || '',
+        lastName: adminUser.lastName || '',
+        email: adminUser.email || '',
+        createdAt: new Date().toISOString(),
+      }
+      authStorage.setCurrentUser(user)
 
       setShowAdminModal(false)
       setAdminEmail('')
