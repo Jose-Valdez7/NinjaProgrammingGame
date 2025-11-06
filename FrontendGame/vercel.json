@@ -2,9 +2,17 @@
   "version": 2,
   "builds": [
     {
-      "src": "index.html",
+      "src": "FrontendGame/package.json",
       "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
+      "config": {
+        "distDir": "FrontendGame/dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "FrontendGame/dist/$1"
     }
   ]
 }
