@@ -1,5 +1,44 @@
-import { createApp } from '../src/main';
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import * as path from 'path';
+import * as fs from 'fs';
+
+// Importar desde el código compilado
+// En Vercel, el código está compilado en dist/
+let createApp: any;
+
+// Determinar la ruta base según donde se ejecute
+const cwd = process.cwd();
+const isBackendGameRoot = cwd.endsWith('BackendGame') || fs.existsSync(path.join(cwd, 'api', 'index.ts'));
+const basePath = isBackendGameRoot ? '.' : 'BackendGame';
+
+console.log('📁 Current working directory:', cwd);
+console.log('📁 Base path for imports:', basePath);
+
+try {
+  // Intentar importar desde dist (producción/compilado)
+  const distPath = path.join(basePath, 'dist', 'main');
+  console.log('🔍 Trying to import from:', distPath);
+  createApp = require(distPath).createApp;
+  console.log('✅ Successfully imported createApp from dist');
+} catch (distError: any) {
+  console.warn('⚠️ Failed to import from dist:', distError.message);
+  try {
+    // Si no existe dist, importar desde src (desarrollo)
+    const srcPath = path.join(basePath, 'src', 'main');
+    console.log('🔍 Trying to import from:', srcPath);
+    createApp = require(srcPath).createApp;
+    console.log('✅ Successfully imported createApp from src');
+  } catch (srcError: any) {
+    console.error('❌ Failed to import createApp from both dist and src');
+    console.error('Dist error:', distError.message);
+    console.error('Src error:', srcError.message);
+    throw new Error(`Cannot import createApp: ${srcError.message}`);
+  }
+}
+
+if (!createApp) {
+  throw new Error('createApp function is undefined after import');
+}
 
 let cachedApp: any;
 let isInitializing = false;
