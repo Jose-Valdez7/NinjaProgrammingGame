@@ -1,22 +1,16 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "FrontendGame/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "FrontendGame/dist"
-      }
-    }
-  ],
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
   "routes": [
     {
-      "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|svg|woff|woff2|ttf|eot))",
-      "dest": "FrontendGame/dist/$1"
+      "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|svg|woff|woff2|ttf|eot|mp4|mp3|atlas|json|skel))",
+      "dest": "/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "FrontendGame/dist/index.html"
+      "dest": "/index.html"
     }
   ]
 }
