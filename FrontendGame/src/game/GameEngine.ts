@@ -815,7 +815,7 @@ export class GameEngine {
   private ninjaSprite: Container | null = null
   private ninjaSpine: Spine | null = null
   private spineLoadPromise: Promise<void> | null = null
-  private textures: Record<string, Texture> = {}
+  //private textures: Record<string, Texture> = {}
   private readonly cellSize: number
   private readonly gridSize: number
   private ninjaEnergized = false
