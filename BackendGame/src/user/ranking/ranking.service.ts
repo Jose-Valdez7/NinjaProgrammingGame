@@ -9,23 +9,37 @@ export class RankingService {
   async findAll(pagination?: PaginationDto) {
     try {
       console.log('📊 RankingService.findAll called with:', pagination);
+      const startTime = Date.now();
       const page = Math.max(1, Number(pagination?.page || 1));
       const limit = Math.max(1, Math.min(100, Number(pagination?.limit || 10)));
       const skip = (page - 1) * limit;
       
       console.log('📊 Fetching rankings from database...');
+      
+      // Asegurar conexión a Prisma antes de hacer queries
+      try {
+        await this.prisma.$connect();
+        console.log('✅ Prisma connected for ranking query');
+      } catch (connectError: any) {
+        console.warn('⚠️ Prisma already connected or connection error:', connectError?.message);
+      }
+      
+      const queryStart = Date.now();
       // 1) Mejor nivel alcanzado (sobre todos los niveles)
       const maxLevelByUser = await this.prisma.ranking.groupBy({
         by: ['userId'],
         _max: { level: true },
       });
+      console.log(`⏱️ First groupBy took ${Date.now() - queryStart}ms`);
 
+      const query2Start = Date.now();
       // 2) Sumas de comandos/tiempo SOLO de niveles 11 a 15
       const sumsLvl11To15 = await this.prisma.ranking.groupBy({
         by: ['userId'],
         where: { level: { gte: 11, lte: 15 } },
         _sum: { commandsUsed: true, timeTaken: true },
       });
+      console.log(`⏱️ Second groupBy took ${Date.now() - query2Start}ms`);
 
       console.log('📊 maxLevelByUser count:', maxLevelByUser.length);
       
@@ -46,10 +60,12 @@ export class RankingService {
 
       // Cargar datos de usuario
       const userIds = maxLevelByUser.map(r => r.userId);
+      const query3Start = Date.now();
       const users = await this.prisma.user.findMany({
         where: { id: { in: userIds } },
         select: { id: true, firstName: true, lastName: true, email: true, phone: true, score: true },
       });
+      console.log(`⏱️ User query took ${Date.now() - query3Start}ms`);
       const userMap = new Map(users.map(u => [u.id, u] as const));
 
       // Preparar filas combinadas
@@ -84,7 +100,8 @@ export class RankingService {
       const paginated = combined.slice(skip, skip + limit);
       const totalPages = Math.max(1, Math.ceil(total / limit));
 
-      console.log('📊 Returning rankings:', { total, paginated: paginated.length, page, totalPages });
+      const totalTime = Date.now() - startTime;
+      console.log(`📊 Returning rankings (total time: ${totalTime}ms):`, { total, paginated: paginated.length, page, totalPages });
       
       return {
         items: paginated,

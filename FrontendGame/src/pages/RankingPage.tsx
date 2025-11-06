@@ -20,9 +20,9 @@ export default function RankingPage() {
       const url = apiUrl(`api/rankings?page=${p}&limit=${limit}`)
       console.log('🔍 Fetching rankings from:', url)
       
-      // Agregar timeout de 10 segundos
+      // Agregar timeout de 30 segundos (las queries de ranking pueden tardar en Supabase)
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000)
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
       
       const res = await fetch(url, {
         headers: { 'Content-Type': 'application/json' },

@@ -77,6 +77,8 @@ model Ranking {
 
   @@unique([level, userId])
   @@index([level])
+  @@index([userId]) // Índice para optimizar groupBy por userId
+  @@index([userId, level]) // Índice compuesto para queries que filtran por userId y level
   @@map("rankings")
 }
 
