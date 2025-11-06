@@ -76,35 +76,87 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error(`Failed to import createApp: ${importError.message}`);
       }
       
-      initPromise = createApp()
-        .then((app) => {
-          cachedApp = app;
-          isInitializing = false;
-          console.log('✅ NestJS app initialized successfully');
-          return app;
-        })
-        .catch((err) => {
-          isInitializing = false;
-          console.error('❌ Failed to initialize NestJS app');
-          console.error('Error name:', err?.name);
-          console.error('Error message:', err?.message);
-          console.error('Error stack:', err?.stack);
-          if (err?.cause) {
-            console.error('Error cause:', err.cause);
-          }
-          throw err;
-        });
+      // Crear la promesa de inicialización con timeout
+      const initTimeout = 30000; // 30 segundos
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`App initialization timeout after ${initTimeout}ms`));
+        }, initTimeout);
+      });
+
+      initPromise = Promise.race([
+        createApp()
+          .then((app) => {
+            if (!app) {
+              throw new Error('createApp returned null or undefined');
+            }
+            cachedApp = app;
+            isInitializing = false;
+            console.log('✅ NestJS app initialized successfully');
+            console.log('App type:', typeof app);
+            console.log('App has getHttpAdapter:', typeof app.getHttpAdapter === 'function');
+            return app;
+          })
+          .catch((err) => {
+            isInitializing = false;
+            console.error('❌ Failed to initialize NestJS app in createApp()');
+            console.error('Error name:', err?.name);
+            console.error('Error message:', err?.message);
+            console.error('Error stack:', err?.stack);
+            if (err?.cause) {
+              console.error('Error cause:', err.cause);
+            }
+            // Log adicional para errores de Prisma
+            if (err?.message?.includes('Prisma') || err?.message?.includes('database') || err?.message?.includes('connect')) {
+              console.error('🔴 Database connection error detected');
+              console.error('DATABASE_URL format check:', process.env.DATABASE_URL ? 'Present' : 'Missing');
+            }
+            throw err;
+          }),
+        timeoutPromise,
+      ]) as Promise<any>;
     }
 
     // Esperar a que la inicialización termine si está en progreso
     if (initPromise) {
       console.log('⏳ Waiting for app initialization...');
-      await initPromise;
-      console.log('✅ App initialization complete');
+      try {
+        const result = await initPromise;
+        console.log('✅ App initialization promise resolved');
+        console.log('Result type:', typeof result);
+        console.log('Result is app:', !!result);
+        
+        // Verificar que cachedApp se estableció
+        if (!cachedApp && result) {
+          console.warn('⚠️ cachedApp is null but result exists, setting it now');
+          cachedApp = result;
+        }
+      } catch (initError: any) {
+        isInitializing = false;
+        console.error('❌ App initialization promise rejected');
+        console.error('Init error name:', initError?.name);
+        console.error('Init error message:', initError?.message);
+        console.error('Init error stack:', initError?.stack);
+        if (initError?.cause) {
+          console.error('Init error cause:', initError.cause);
+        }
+        // Asegurar que cachedApp esté en null si falló
+        cachedApp = null;
+        // Re-lanzar el error para que se capture en el catch principal
+        throw initError;
+      }
     }
 
     if (!cachedApp) {
-      throw new Error('Failed to initialize NestJS application - cachedApp is null');
+      // Si llegamos aquí, la inicialización falló silenciosamente
+      const errorMsg = 'Failed to initialize NestJS application - cachedApp is null after initialization';
+      console.error('❌', errorMsg);
+      console.error('State check:', {
+        cachedApp: cachedApp,
+        isInitializing: isInitializing,
+        hasInitPromise: !!initPromise,
+      });
+      throw new Error(errorMsg);
     }
 
     // Obtener la instancia de Express de NestJS
@@ -134,13 +186,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         timestamp: new Date().toISOString(),
       };
       
-      // Solo incluir stack en desarrollo o si NODE_ENV no es production
-      if (process.env.NODE_ENV !== 'production') {
+      // En Vercel, siempre mostrar detalles del error para debugging
+      // (en producción real podrías querer ocultarlos)
+      errorResponse.details = {
+        name: err?.name,
+        type: typeof err,
+      };
+      
+      // Incluir stack si está disponible (útil para debugging)
+      if (err?.stack) {
         errorResponse.stack = err?.stack;
-        errorResponse.details = {
-          name: err?.name,
-          cause: err?.cause,
-        };
+      }
+      
+      // Incluir información adicional si está disponible
+      if (err?.cause) {
+        errorResponse.cause = err.cause;
       }
       
       res.status(500).json(errorResponse);

@@ -7,8 +7,25 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   async onModuleInit() {
-    // Conectar a la base de datos cuando el módulo se inicialice
-    await this.$connect();
+    // En Vercel/serverless, conectar de forma lazy puede evitar timeouts
+    // Prisma se conectará automáticamente en la primera query
+    // Solo conectar explícitamente si no estamos en un entorno serverless
+    if (process.env.VERCEL) {
+      console.log('🔧 Vercel environment detected - using lazy Prisma connection');
+      // En Vercel, Prisma se conectará automáticamente cuando se necesite
+      return;
+    }
+    
+    // En desarrollo/local, conectar inmediatamente
+    try {
+      await this.$connect();
+      console.log('✅ Prisma connected to database');
+    } catch (error: any) {
+      console.error('❌ Prisma connection error:', error?.message);
+      console.error('DATABASE_URL present:', !!process.env.DATABASE_URL);
+      // Lanzar el error solo en desarrollo
+      throw error;
+    }
   }
 
   async onModuleDestroy() {
