@@ -8,10 +8,12 @@ export class RankingService {
 
   async findAll(pagination?: PaginationDto) {
     try {
+      console.log('📊 RankingService.findAll called with:', pagination);
       const page = Math.max(1, Number(pagination?.page || 1));
       const limit = Math.max(1, Math.min(100, Number(pagination?.limit || 10)));
       const skip = (page - 1) * limit;
       
+      console.log('📊 Fetching rankings from database...');
       // 1) Mejor nivel alcanzado (sobre todos los niveles)
       const maxLevelByUser = await this.prisma.ranking.groupBy({
         by: ['userId'],
@@ -25,8 +27,11 @@ export class RankingService {
         _sum: { commandsUsed: true, timeTaken: true },
       });
 
+      console.log('📊 maxLevelByUser count:', maxLevelByUser.length);
+      
       // Si no hay registros, devolver vacío controlado
       if (!maxLevelByUser.length) {
+        console.log('📊 No rankings found, returning empty result');
         return {
           items: [],
           meta: {
@@ -79,6 +84,8 @@ export class RankingService {
       const paginated = combined.slice(skip, skip + limit);
       const totalPages = Math.max(1, Math.ceil(total / limit));
 
+      console.log('📊 Returning rankings:', { total, paginated: paginated.length, page, totalPages });
+      
       return {
         items: paginated,
         meta: {
@@ -91,6 +98,7 @@ export class RankingService {
       };
     } catch (error) {
       // Fallback silencioso: devolver lista vacía si hay error (migraciones pendientes o tabla sin columna)
+      console.error('❌ Error in RankingService.findAll:', error);
       const page = Math.max(1, Number(pagination?.page || 1));
       const limit = Math.max(1, Math.min(100, Number(pagination?.limit || 10)));
       return {
