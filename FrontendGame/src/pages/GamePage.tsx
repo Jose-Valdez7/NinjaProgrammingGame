@@ -13,6 +13,12 @@ import voidGameOverVideo from '@/assets/images/gameoverscreens/Ninja-void.mp4'
 import energyCutsceneVideo from '@/assets/images/gameoverscreens/ninja_energy.mp4'
 import { getAuthHeaders, apiUrl, authStorage } from '@/config/env'
 import { addOfflineProgress } from '@/utils/offlineProgress'
+import ninjaGameBgm from '@/assets/sounds/ninjaGame.mp3'
+import arrowUp from '@/assets/images/icons/arriba.png'
+import arrowDown from '@/assets/images/icons/abajo.png'
+import arrowLeft from '@/assets/images/icons/izquierda.png'
+import arrowRight from '@/assets/images/icons/derecha.png'
+import ninjaIcon from '@/assets/images/icons/Ninja.png'
 
 const safeTileImg = new URL('../assets/images/backgrounds/secure1.png', import.meta.url).href
 const energyTileImg = new URL('../assets/energy/energy1.png', import.meta.url).href
@@ -51,11 +57,31 @@ export default function GamePage() {
   const [introMessage, setIntroMessage] = useState('')
   const [showEnergyCutscene, setShowEnergyCutscene] = useState(false)
   const [showFinalCelebration, setShowFinalCelebration] = useState(false)
+  const [showRegistrationExplanationModal, setShowRegistrationExplanationModal] = useState(false)
+ 
+  // 🔊 Música de fondo
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     if (sessionStorage.getItem('forceGameReload') === 'true') {
       sessionStorage.removeItem('forceGameReload')
       window.location.reload()
+    }
+  }, [])
+
+  // Intentar reproducir BGM tras interacción del usuario (para evitar bloqueo de autoplay)
+  useEffect(() => {
+    const tryPlay = () => {
+      if (!audioRef.current) return
+      void audioRef.current.play().catch(() => {})
+      window.removeEventListener('pointerdown', tryPlay)
+      window.removeEventListener('keydown', tryPlay)
+    }
+    window.addEventListener('pointerdown', tryPlay)
+    window.addEventListener('keydown', tryPlay)
+    return () => {
+      window.removeEventListener('pointerdown', tryPlay)
+      window.removeEventListener('keydown', tryPlay)
     }
   }, [])
 
@@ -161,6 +187,9 @@ export default function GamePage() {
         gameEngineRef.current.destroy()
         gameEngineRef.current = null
       }
+      if (audioRef.current) {
+        audioRef.current.pause()
+      }
     }
   }, [])
 
@@ -193,6 +222,14 @@ export default function GamePage() {
     setError('')
     setCurrentLevel(levelNumber)
 
+    // Reproducir música de fondo
+    if (audioRef.current) {
+      audioRef.current.src = ninjaGameBgm
+      audioRef.current.loop = true
+      audioRef.current.volume = 0.35
+      void audioRef.current.play().catch(() => {})
+    }
+
     if (levelNumber >= 6) {
       startTimer()
     } else {
@@ -203,19 +240,23 @@ export default function GamePage() {
     // Mostrar modales introductorios según nivel
     if (levelNumber === 1) {
       setIntroTitle('Nivel 1')
-      setIntroMessage('Por ahora, juega con las flechas. Objetivo: recoge solo una energía.')
+      setIntroMessage('Usa las flechas del teclado para mover al ninja.')
       setShowIntroModal(true)
     } else if (levelNumber === 2) {
       setIntroTitle('Nivel 2')
-      setIntroMessage('Sigue con las flechas. Ahora debes recoger energía y entrar al portal.')
+      setIntroMessage('Sigue usando las flechas. Ahora debes recoger todas las energías requeridas y entrar al portal.')
       setShowIntroModal(true)
     } else if (levelNumber === 4) {
       setIntroTitle('Nivel 4')
-      setIntroMessage('A partir de aquí debes mover al ninja usando comandos.')
+      setIntroMessage('A partir de aquí debes mover al ninja usando comandos en lugar de flechas.')
       setShowIntroModal(true)
     } else if (levelNumber === 6) {
       setIntroTitle('Nivel 6')
-      setIntroMessage('Desde este nivel se activa el reloj. Completa los objetivos antes de que termine el tiempo.')
+      setIntroMessage('¡Aumenta la dificultad! A partir de aquí las líneas guía desaparecen y se activa el reloj.')
+      setShowIntroModal(true)
+    } else if (levelNumber === 11) {
+      setIntroTitle('Nivel 11: ¡Bucles!')
+      setIntroMessage('¡Ahora puedes usar bucles! Repite secuencias de comandos con (comandos)xN')
       setShowIntroModal(true)
     } else {
       setShowIntroModal(false)
@@ -241,6 +282,10 @@ export default function GamePage() {
       const dir = map[e.key]
       if (!dir) return
       e.preventDefault()
+      // Asegurar BGM corriendo tras interacción
+      if (audioRef.current && audioRef.current.paused) {
+        void audioRef.current.play().catch(() => {})
+      }
 
       setCommands(prev => {
         const trimmed = prev.trim()
@@ -555,8 +600,9 @@ export default function GamePage() {
               }
             } else {
               if (currentLevel >= 3) {
+                // Mostrar modal de explicación antes de redirigir a login
                 setTimeout(() => {
-                  window.location.href = '/login?next=/game'
+                  setShowRegistrationExplanationModal(true)
                 }, 1200)
                 setIsPlaying(false)
                 return
@@ -606,13 +652,15 @@ export default function GamePage() {
 
   return (
     <div className="min-h-screen bg-ninja-dark text-white">
+      {/* Audio de fondo */}
+      <audio ref={audioRef} src={ninjaGameBgm} loop hidden />
       {/* Header */}
       <div className="bg-ninja-purple border-b border-blue-500/30 p-4">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold flex items-center gap-2">
               <Home size={20} />
-              Ninja Energy Quest
+              Ninja 404 Quest
             </h1>
           </div>
 
@@ -689,25 +737,462 @@ export default function GamePage() {
 
       {/* Intro Modals por nivel (mismo estilo que celebración final) */}
       {showIntroModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur">
-          <div className="relative w-full max-w-3xl mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)]">
+        <>
+          <style>{`
+            .intro-modal-scroll::-webkit-scrollbar {
+              width: 8px;
+            }
+            .intro-modal-scroll::-webkit-scrollbar-track {
+              background: rgba(0, 0, 0, 0.2);
+              border-radius: 10px;
+            }
+            .intro-modal-scroll::-webkit-scrollbar-thumb {
+              background: linear-gradient(180deg, rgba(16, 185, 129, 0.8) 0%, rgba(16, 185, 129, 0.6) 100%);
+              border-radius: 10px;
+              border: 1px solid rgba(16, 185, 129, 0.3);
+              box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+            }
+            .intro-modal-scroll::-webkit-scrollbar-thumb:hover {
+              background: linear-gradient(180deg, rgba(16, 185, 129, 1) 0%, rgba(16, 185, 129, 0.8) 100%);
+              box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+            }
+            @keyframes shimmer {
+              0% { transform: translateX(-100%); }
+              100% { transform: translateX(100%); }
+            }
+            .shimmer-effect {
+              animation: shimmer 3s infinite;
+            }
+          `}</style>
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur p-4">
+            <div className="relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)] flex flex-col">
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse" />
+                <div className="absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-purple-500/40 blur-3xl animate-pulse delay-300" />
+              </div>
+
+              <div 
+                className="intro-modal-scroll relative px-10 py-8 text-center space-y-4 overflow-y-auto flex-1 min-h-0"
+                style={{
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'rgba(16, 185, 129, 0.6) transparent',
+                }}
+              >
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-white drop-shadow-lg">
+                {introTitle}
+              </h2>
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-lg text-emerald-200 max-w-xl mx-auto">
+                  {introMessage}
+                </p>
+                {/* Mostrar imagen de objetivo según el nivel */}
+                {currentLevel === 1 && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <img 
+                      src={energyTileImg} 
+                      alt="Energía" 
+                      className="w-12 h-12 object-contain animate-pulse shadow-lg shadow-yellow-500/50 rounded-lg border border-yellow-400/30 p-1 bg-black/20"
+                    />
+                    <span className="text-sm text-yellow-300 font-semibold">Objetivo: Recoge la energía</span>
+                  </div>
+                )}
+                {currentLevel === 2 && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <img 
+                      src={doorTileImg} 
+                      alt="Portal" 
+                      className="w-12 h-12 object-contain animate-pulse shadow-lg shadow-purple-500/50 rounded-lg border border-purple-400/30 p-1 bg-black/20"
+                    />
+                    <span className="text-sm text-purple-300 font-semibold">Objetivo: Llega al portal</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Mostrar flechas para niveles 1, 2 y 4 */}
+              {(currentLevel === 1 || currentLevel === 2 || currentLevel === 4) && (
+                <div className="flex flex-col items-center gap-2 py-2">
+                  {currentLevel === 4 ? (
+                    <>
+                      <p className="text-base text-purple-200 mb-2">Comandos disponibles:</p>
+                      <div className="grid grid-cols-2 gap-4 max-w-md">
+                        <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30">
+                          <img src={arrowRight} alt="Derecha" className="w-16 h-16 object-contain animate-pulse" />
+                          <span className="text-sm text-emerald-200 font-semibold">D = Derecha</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30">
+                          <img src={arrowLeft} alt="Izquierda" className="w-16 h-16 object-contain animate-pulse" />
+                          <span className="text-sm text-emerald-200 font-semibold">I = Izquierda</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30">
+                          <img src={arrowUp} alt="Arriba" className="w-16 h-16 object-contain animate-pulse" />
+                          <span className="text-sm text-emerald-200 font-semibold">S = Subir</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30">
+                          <img src={arrowDown} alt="Abajo" className="w-16 h-16 object-contain animate-pulse" />
+                          <span className="text-sm text-emerald-200 font-semibold">B = Bajar</span>
+                        </div>
+                      </div>
+                      <div className="mt-4 p-4 bg-black/40 rounded-xl border border-emerald-400/30 max-w-md">
+                        <p className="text-sm text-purple-200 mb-2">Ejemplo de comandos:</p>
+                        <div className="bg-black/60 rounded-lg p-3 border border-emerald-500/40">
+                          <code className="text-emerald-300 font-mono text-sm">D3,S2,I1</code>
+                        </div>
+                        <p className="text-xs text-emerald-300 mt-2">
+                          Esto significa: Derecha 3 pasos, Subir 2 pasos, Izquierda 1 paso
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-center max-w-4xl">
+                        <div className="bg-black/40 rounded-xl border border-emerald-400/30 p-6">
+                          <p className="text-base text-purple-200 mb-4 text-center">Usa estas flechas del teclado:</p>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div></div>
+                            <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30 hover:scale-110 transition-transform cursor-pointer">
+                              <img src={arrowUp} alt="Arriba" className="w-16 h-16 object-contain" />
+                              <span className="text-sm text-emerald-200">↑</span>
+                            </div>
+                            <div></div>
+                            <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30 hover:scale-110 transition-transform cursor-pointer">
+                              <img src={arrowLeft} alt="Izquierda" className="w-16 h-16 object-contain" />
+                              <span className="text-sm text-emerald-200">←</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30">
+                              <img src={ninjaIcon} alt="Ninja" className="w-16 h-16 object-contain" />
+                              <span className="text-sm text-emerald-200">Ninja</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30 hover:scale-110 transition-transform cursor-pointer">
+                              <img src={arrowRight} alt="Derecha" className="w-16 h-16 object-contain" />
+                              <span className="text-sm text-emerald-200">→</span>
+                            </div>
+                            <div></div>
+                            <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30 hover:scale-110 transition-transform cursor-pointer">
+                              <img src={arrowDown} alt="Abajo" className="w-16 h-16 object-contain" />
+                              <span className="text-sm text-emerald-200">↓</span>
+                            </div>
+                            <div></div>
+                          </div>
+                        </div>
+                      </div>
+                      {currentLevel === 1 && (
+                        <>
+                          <div className="mt-2 p-3 bg-gradient-to-r from-yellow-900/40 to-yellow-800/40 rounded-xl border border-yellow-400/30 max-w-md shadow-lg">
+                            <p className="text-sm text-yellow-200 mb-1 flex items-center justify-center gap-2">
+                              <span className="text-lg">💡</span>
+                              <span>Al presionar las flechas aparecerá una <strong className="text-yellow-300">línea guía</strong> que debes seguir hasta el objetivo</span>
+                            </p>
+                          </div>
+                          <div className="mt-2 p-3 bg-black/40 rounded-xl border border-yellow-400/30 max-w-md">
+                            <p className="text-sm text-yellow-200 flex items-center justify-center gap-2">
+                              <span className="text-lg">⚡</span>
+                              <span>Recuerda pulsar el botón <strong className="text-yellow-300">Ejecutar</strong> al final para que el ninja se mueva</span>
+                            </p>
+                          </div>
+                        </>
+                      )}
+                      {currentLevel === 2 && (
+                        <>
+                          <div className="mt-2 p-3 bg-gradient-to-r from-purple-900/40 to-purple-800/40 rounded-xl border border-purple-400/30 max-w-md shadow-lg">
+                            <p className="text-sm text-purple-200 mb-1 flex items-center justify-center gap-2">
+                              <span className="text-lg">💡</span>
+                              <span>La <strong className="text-purple-300">línea guía</strong> te mostrará el camino mientras presionas las flechas</span>
+                            </p>
+                          </div>
+                          <div className="mt-4 relative max-w-lg mx-auto">
+                            {/* Efecto de resplandor de fondo */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-amber-600/30 via-yellow-500/40 to-amber-600/30 rounded-2xl blur-xl animate-pulse"></div>
+                            
+                            {/* Contenedor principal */}
+                            <div className="relative bg-gradient-to-br from-amber-900/80 via-yellow-800/70 to-amber-900/80 rounded-2xl border-2 border-amber-500/60 shadow-2xl shadow-amber-500/50 p-6 transform hover:scale-[1.02] transition-transform duration-300">
+                              {/* Efecto de brillo animado */}
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/20 to-transparent rounded-2xl shimmer-effect"></div>
+                              
+                              <div className="relative z-10">
+                                {/* Título con efecto llamativo */}
+                                <div className="flex items-center justify-center gap-3 mb-4">
+                                  <span className="text-4xl animate-bounce">⚡</span>
+                                  <h3 className="text-xl font-extrabold text-amber-100 drop-shadow-lg">
+                                    <span className="bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent">
+                                      ¡IMPORTANTE!
+                                    </span>
+                                  </h3>
+                                </div>
+                                
+                                {/* Mensaje destacado */}
+                                <div className="bg-black/50 rounded-xl p-4 border border-amber-400/40">
+                                  <p className="text-base text-amber-100 text-center font-semibold leading-relaxed">
+                                    Debes recoger <span className="text-amber-200 text-lg font-bold">TODAS LAS ENERGÍAS</span> requeridas<br />
+                                    <span className="text-amber-300 text-sm">antes de llegar al portal</span>
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Modal del nivel 6 - Sin líneas guía y con tiempo */}
+              {currentLevel === 6 && (
+                <div className="flex flex-col items-center gap-3 py-2">
+                  {/* Mensaje destacado sobre el tiempo */}
+                  <div className="relative p-4 bg-gradient-to-r from-blue-900/60 via-blue-800/60 to-blue-900/60 rounded-xl border-2 border-blue-400/50 max-w-md shadow-lg shadow-blue-500/30">
+                    <div className="absolute inset-0 bg-blue-500/20 rounded-xl animate-pulse"></div>
+                    <div className="relative flex items-center gap-3">
+                      <span className="text-2xl">⏱️</span>
+                      <p className="text-sm font-semibold text-blue-200">
+                        <span className="text-yellow-300">¡Menos tiempo = Mejor clasificación!</span>
+                        <br />
+                        <span className="text-xs text-blue-300 mt-1 block">Optimiza tu estrategia para completar rápido</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-black/40 rounded-xl border border-blue-400/30 p-4 max-w-md shadow-lg space-y-3">
+                    {/* Líneas guía desaparecen */}
+                    <div className="bg-gradient-to-r from-red-900/40 to-red-800/40 rounded-lg p-3 border border-red-500/50 shadow-md">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-red-400 text-lg">❌</span>
+                        <p className="text-sm text-red-200 font-semibold">Las líneas guía desaparecen</p>
+                      </div>
+                      <p className="text-xs text-red-300 ml-7">
+                        Ya no tendrás ayuda visual del camino. Debes planear tu ruta mentalmente.
+                      </p>
+                    </div>
+
+                    {/* Tiempo se activa */}
+                    <div className="bg-gradient-to-r from-blue-900/40 to-blue-800/40 rounded-lg p-3 border border-blue-500/50 shadow-md">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-blue-400 text-lg">⏰</span>
+                        <p className="text-sm text-blue-200 font-semibold">El reloj se activa</p>
+                      </div>
+                      <p className="text-xs text-blue-300 ml-7">
+                        Cada nivel tiene un tiempo. ¡Completalo lo antes posible!
+                      </p>
+                    </div>
+
+                    {/* Menos tiempo mejor */}
+                    <div className="bg-gradient-to-r from-emerald-900/40 to-emerald-800/40 rounded-lg p-3 border border-emerald-500/50 shadow-md">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-emerald-400 text-lg">⚡</span>
+                        <p className="text-sm text-emerald-200 font-semibold">Velocidad importa</p>
+                      </div>
+                      <p className="text-xs text-emerald-300 ml-7">
+                        Tu tiempo total se registra en el ranking. <strong className="text-emerald-200">Mientras menos tiempo, mejor posición.</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 p-3 bg-gradient-to-r from-blue-900/40 to-blue-800/40 rounded-xl border border-blue-400/50 max-w-md shadow-lg">
+                    <p className="text-sm text-blue-300 text-center flex items-center justify-center gap-2">
+                      <span className="text-xl">💡</span>
+                      <span>Planifica bien tu ruta, <strong className="text-blue-200">cada segundo cuenta</strong> en tu clasificación</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal de Loops para nivel 11 */}
+              {currentLevel === 11 && (
+                <div className="flex flex-col items-center gap-3 py-2">
+                  {/* Mensaje destacado sobre menos movimientos */}
+                  <div className="relative p-4 bg-gradient-to-r from-purple-900/60 via-purple-800/60 to-purple-900/60 rounded-xl border-2 border-purple-400/50 max-w-md shadow-lg shadow-purple-500/30">
+                    <div className="absolute inset-0 bg-purple-500/20 rounded-xl animate-pulse"></div>
+                    <div className="relative flex items-center gap-3">
+                      <span className="text-2xl">⚡</span>
+                      <p className="text-sm font-semibold text-purple-200">
+                        <span className="text-yellow-300">¡Menos movimientos = Mejor clasificación!</span>
+                        <br />
+                        <span className="text-xs text-purple-300 mt-1 block">Usa bucles para optimizar tu estrategia</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-base text-purple-200 mb-1 font-semibold">Sintaxis de bucles:</p>
+                  <div className="bg-black/40 rounded-xl border border-purple-400/30 p-4 max-w-md shadow-lg">
+                    <div className="bg-gradient-to-r from-purple-900/40 to-purple-800/40 rounded-lg p-3 border border-purple-500/50 mb-3 shadow-md">
+                      <code className="text-purple-200 font-mono text-base font-bold">(D1,S1)x3</code>
+                    </div>
+                    <p className="text-xs text-purple-200 mb-3 flex items-center gap-2">
+                      <span className="text-purple-400">→</span>
+                      <span>Repite 3 veces: Derecha 1 paso, Subir 1 paso</span>
+                      <span className="text-emerald-400 ml-auto">✓ 1 movimiento</span>
+                    </p>
+                    <div className="bg-gradient-to-r from-purple-900/40 to-purple-800/40 rounded-lg p-3 border border-purple-500/50 shadow-md">
+                      <code className="text-purple-200 font-mono text-base font-bold">(D2,I1)x2,S2,B1</code>
+                    </div>
+                    <div className="text-xs text-purple-200 mt-2 space-y-1">
+                      <p className="flex items-center gap-2">
+                        <span className="text-purple-400">→</span>
+                        <span>Repite 2 veces: Derecha 2 pasos, Izquierda 1 paso</span>
+                      </p>
+                      <p className="flex items-center gap-2 ml-6">
+                        <span className="text-purple-400">→</span>
+                        <span>Subir 2 pasos, Bajar 1 paso</span>
+                        <span className="text-emerald-400 ml-auto">✓ 3 movimientos</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2 p-3 bg-gradient-to-r from-purple-900/40 to-purple-800/40 rounded-xl border border-purple-400/50 max-w-md shadow-lg">
+                    <p className="text-sm text-purple-300 text-center flex items-center justify-center gap-2">
+                      <span className="text-xl">💡</span>
+                      <span>Los bucles cuentan como <strong className="text-purple-200">un solo movimiento</strong>, aunque repitan múltiples acciones</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {currentLevel === 1 && (
+                <div className="mt-6 relative max-w-lg mx-auto">
+                  {/* Efecto de resplandor de fondo */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-red-600/30 via-red-500/40 to-red-600/30 rounded-2xl blur-xl animate-pulse"></div>
+                  
+                  {/* Contenedor principal */}
+                  <div className="relative bg-gradient-to-br from-red-900/80 via-red-800/70 to-red-900/80 rounded-2xl border-2 border-red-500/60 shadow-2xl shadow-red-500/50 p-6 transform hover:scale-[1.02] transition-transform duration-300">
+                    {/* Efecto de brillo animado */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-red-400/20 to-transparent rounded-2xl shimmer-effect"></div>
+                    
+                    <div className="relative z-10">
+                      {/* Título con efecto llamativo */}
+                      <div className="flex items-center justify-center gap-3 mb-4">
+                        <span className="text-4xl animate-bounce">⚠️</span>
+                        <h3 className="text-xl font-extrabold text-red-100 drop-shadow-lg">
+                          <span className="bg-gradient-to-r from-red-200 to-red-400 bg-clip-text text-transparent">
+                            ¡EVITA ESTOS PELIGROS!
+                          </span>
+                        </h3>
+                      </div>
+                      
+                      {/* Mensaje destacado */}
+                      <div className="bg-black/50 rounded-xl p-4 mb-4 border border-red-400/40">
+                        <p className="text-base text-red-100 text-center font-semibold leading-relaxed">
+                          Si tocas estos elementos,<br />
+                          <span className="text-red-200 text-lg font-bold">tendrás que REPETIR el nivel</span>
+                        </p>
+                      </div>
+                      
+                      {/* Imágenes de peligros con efectos */}
+                      <div className="flex items-center justify-center gap-6">
+                        <div className="flex flex-col items-center gap-2 group">
+                          <div className="relative">
+                            <div className="absolute inset-0 bg-red-500/50 rounded-lg blur-md group-hover:blur-lg transition-all"></div>
+                            <img 
+                              src={snakeTileImg} 
+                              alt="Serpiente" 
+                              className="relative w-16 h-16 object-contain rounded-lg border-2 border-red-400/60 p-2 bg-black/40 shadow-lg shadow-red-500/50 group-hover:scale-110 transition-transform"
+                            />
+                          </div>
+                          <span className="text-sm font-bold text-red-200 drop-shadow-md">SERPIENTE</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-2 group">
+                          <div className="relative">
+                            <div className="absolute inset-0 bg-red-500/50 rounded-lg blur-md group-hover:blur-lg transition-all"></div>
+                            <img 
+                              src={voidTileImg} 
+                              alt="Vacío" 
+                              className="relative w-16 h-16 object-contain rounded-lg border-2 border-red-400/60 p-2 bg-black/40 shadow-lg shadow-red-500/50 group-hover:scale-110 transition-transform"
+                            />
+                          </div>
+                          <span className="text-sm font-bold text-red-200 drop-shadow-md">VACÍO</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+                <button
+                  onClick={() => setShowIntroModal(false)}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-500 text-black font-semibold shadow-lg shadow-emerald-500/40 hover:bg-emerald-400 transition-colors text-sm"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        </>
+      )}
+
+      {/* Modal de explicación de registro (después de completar nivel 3 sin sesión) */}
+      {showRegistrationExplanationModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur p-4">
+          <div className="relative w-full max-w-2xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)] flex flex-col">
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse" />
               <div className="absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-purple-500/40 blur-3xl animate-pulse delay-300" />
             </div>
 
-            <div className="relative px-10 py-12 text-center space-y-6">
+            <div 
+              className="relative px-10 py-8 text-center space-y-4 overflow-y-auto flex-1 min-h-0 intro-modal-scroll"
+              style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'rgba(16, 185, 129, 0.6) transparent',
+              }}
+            >
               <h2 className="text-3xl sm:text-4xl font-extrabold text-white drop-shadow-lg">
-                {introTitle}
+                ¡Regístrate para Continuar!
               </h2>
-              <p className="text-lg text-emerald-200 max-w-xl mx-auto">
-                {introMessage}
-              </p>
 
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+              <div className="flex flex-col items-center gap-4 py-2">
+                <p className="text-lg text-emerald-200 max-w-xl mx-auto">
+                  Has completado los primeros 3 niveles. Para continuar y desbloquear todas las características del juego, necesitas crear una cuenta.
+                </p>
+
+                {/* Beneficios destacados */}
+                <div className="w-full max-w-lg space-y-3 mt-4">
+                  <div className="bg-gradient-to-r from-emerald-900/60 to-emerald-800/60 rounded-xl border border-emerald-400/40 p-4 shadow-lg">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-3xl">🏆</span>
+                      <h3 className="text-lg font-bold text-emerald-200">Ranking de Clasificación</h3>
+                    </div>
+                    <p className="text-sm text-emerald-100 text-left">
+                      Compite con otros jugadores y muestra tus habilidades en el ranking global. Cada nivel completado mejora tu posición.
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-r from-purple-900/60 to-purple-800/60 rounded-xl border border-purple-400/40 p-4 shadow-lg">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-3xl">💾</span>
+                      <h3 className="text-lg font-bold text-purple-200">Progreso Guardado</h3>
+                    </div>
+                    <p className="text-sm text-purple-100 text-left">
+                      Tus niveles superados se guardan automáticamente. Nunca perderás tu progreso, incluso si cierras el juego.
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-r from-blue-900/60 to-blue-800/60 rounded-xl border border-blue-400/40 p-4 shadow-lg">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-3xl">🎮</span>
+                      <h3 className="text-lg font-bold text-blue-200">Acceso Completo</h3>
+                    </div>
+                    <p className="text-sm text-blue-100 text-left">
+                      Desbloquea todos los niveles (4-15) y disfruta de todas las características avanzadas del juego.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-4 bg-black/50 rounded-xl border border-emerald-400/40">
+                  <p className="text-base text-emerald-200 font-semibold">
+                    ¡Es rápido y gratuito! Solo necesitas tu email y cédula.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
                 <button
-                  onClick={() => setShowIntroModal(false)}
-                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-emerald-500 text-black font-semibold shadow-lg shadow-emerald-500/40 hover:bg-emerald-400 transition-colors"
+                  onClick={() => {
+                    setShowRegistrationExplanationModal(false)
+                    setTimeout(() => {
+                      window.location.href = '/login?next=/game'
+                    }, 300)
+                  }}
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-500 text-black font-semibold shadow-lg shadow-emerald-500/40 hover:bg-emerald-400 transition-colors text-base"
                 >
                   Entendido
                 </button>
