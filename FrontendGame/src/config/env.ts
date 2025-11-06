@@ -5,7 +5,28 @@ import type { User } from '../types/game'
 
 export const config = {
   // URL base de la API
-  API_BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
+  // En desarrollo local, SIEMPRE usar localhost. En producción, usar la URL de Vercel
+  API_BASE_URL: (() => {
+    const isDev = import.meta.env.DEV
+    
+    // En desarrollo, SIEMPRE usar localhost (ignorar VITE_API_URL si está configurada)
+    if (isDev) {
+      const url = 'http://localhost:3001/api'
+      console.log('🔧 [API Config] Modo desarrollo - usando localhost:', url)
+      return url
+    }
+    
+    // En producción, usar VITE_API_URL si está configurada, sino usar Vercel
+    const envUrl = import.meta.env.VITE_API_URL
+    if (envUrl) {
+      console.log('🔧 [API Config] Producción - usando VITE_API_URL:', envUrl)
+      return envUrl
+    }
+    
+    const prodUrl = 'https://ninja-api.vercel.app/api'
+    console.log('🔧 [API Config] Producción - usando URL por defecto:', prodUrl)
+    return prodUrl
+  })(),
   
   // Configuración de autenticación
   AUTH: {
@@ -53,7 +74,13 @@ export const authStorage = {
 // Función para construir URLs de la API
 export const apiUrl = (endpoint: string) => {
   const baseUrl = config.API_BASE_URL.replace(/\/$/, '') // Remover trailing slash
-  const cleanEndpoint = endpoint.replace(/^\//, '') // Remover leading slash
+  let cleanEndpoint = endpoint.replace(/^\//, '') // Remover leading slash
+  
+  // Si la base URL ya incluye '/api', no agregar 'api/' al endpoint
+  if (baseUrl.includes('/api') && cleanEndpoint.startsWith('api/')) {
+    cleanEndpoint = cleanEndpoint.replace(/^api\//, '')
+  }
+  
   return `${baseUrl}/${cleanEndpoint}`
 }
 
