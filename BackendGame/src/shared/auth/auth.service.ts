@@ -15,9 +15,9 @@ import { PrismaService } from '../database/prisma.service';
 import {
   ResourceAlreadyExistsException,
   UsernameNotFoundException,
-} from 'src/common/exceptions';
+} from '../../common/exceptions';
 import { LoggerService } from '../logger/logger.service';
-import { BaseResponseDto } from 'src/common/dtos/response.dto';
+import { BaseResponseDto } from '../../common/dtos/response.dto';
 import { Role } from './enums/role.enums';
 
 @Injectable()

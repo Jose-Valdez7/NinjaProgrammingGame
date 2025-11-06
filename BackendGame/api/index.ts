@@ -59,6 +59,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (missingVars.length > 0) {
         const errorMsg = `Missing required environment variables: ${missingVars.join(', ')}`;
         console.error('❌', errorMsg);
+        // Resetear el estado de inicialización antes de lanzar el error
+        isInitializing = false;
         throw new Error(errorMsg);
       }
       
@@ -133,6 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       } catch (initError: any) {
         isInitializing = false;
+        initPromise = null; // Limpiar la promesa fallida
         console.error('❌ App initialization promise rejected');
         console.error('Init error name:', initError?.name);
         console.error('Init error message:', initError?.message);
@@ -145,6 +148,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Re-lanzar el error para que se capture en el catch principal
         throw initError;
       }
+    } else if (isInitializing && !initPromise) {
+      // Si isInitializing es true pero no hay initPromise, algo salió mal
+      // Esperar un momento y reintentar
+      console.warn('⚠️ isInitializing is true but no initPromise, waiting...');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Si después de esperar sigue sin initPromise, resetear el estado
+      if (!initPromise && !cachedApp) {
+        console.error('❌ Initialization state inconsistent, resetting...');
+        isInitializing = false;
+        throw new Error('Initialization state inconsistent - please retry the request');
+      }
     }
 
     if (!cachedApp) {
@@ -156,6 +171,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         isInitializing: isInitializing,
         hasInitPromise: !!initPromise,
       });
+      // Resetear el estado para permitir reintentos
+      isInitializing = false;
+      initPromise = null;
       throw new Error(errorMsg);
     }
 
