@@ -21,6 +21,11 @@ export async function createApp() {
       corsOrigin = allowedOrigins.split(',').map(origin => origin.trim());
     } else if (frontendUrl) {
       corsOrigin = frontendUrl;
+    } else {
+      // Si no hay configuración, permitir todos los orígenes en producción (temporal)
+      // TODO: Configurar FRONTEND_URL o ALLOWED_ORIGINS en Vercel
+      corsOrigin = true;
+      console.warn('⚠️ No FRONTEND_URL or ALLOWED_ORIGINS configured, allowing all origins');
     }
   } else {
     // En desarrollo, permitir localhost y otros orígenes comunes
