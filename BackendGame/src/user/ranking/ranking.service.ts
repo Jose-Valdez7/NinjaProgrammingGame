@@ -16,12 +16,15 @@ export class RankingService {
       
       console.log('📊 Fetching rankings from database...');
       
-      // Asegurar conexión a Prisma antes de hacer queries
-      try {
-        await this.prisma.$connect();
-        console.log('✅ Prisma connected for ranking query');
-      } catch (connectError: any) {
-        console.warn('⚠️ Prisma already connected or connection error:', connectError?.message);
+      // En Vercel, no conectar explícitamente - Prisma se conecta automáticamente
+      // Solo verificar que podemos hacer queries
+      if (!process.env.VERCEL) {
+        try {
+          await this.prisma.$connect();
+          console.log('✅ Prisma connected for ranking query');
+        } catch (connectError: any) {
+          console.warn('⚠️ Prisma already connected or connection error:', connectError?.message);
+        }
       }
       
       const queryStart = Date.now();

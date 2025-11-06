@@ -1,0 +1,15 @@
+URL DIRECTA (NO usar en Vercel):
+postgresql://postgres:dQ1qiFqK5NxClKBo@db.welmxwvtmmxkmsvaiwwc.supabase.co:5432/postgres
+
+URL CONNECTION POOLER (USAR en Vercel):
+postgresql://postgres:dQ1qiFqK5NxClKBo@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+
+Si la región anterior no funciona, prueba con estas otras regiones comunes:
+- us-east-1 (Norteamérica Este)
+- us-west-1 (Norteamérica Oeste)
+- eu-west-1 (Europa Oeste)
+- ap-southeast-1 (Asia Pacífico)
+
+Formato alternativo (si el anterior no funciona):
+postgresql://postgres.welmxwvtmmxkmsvaiwwc:dQ1qiFqK5NxClKBo@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+

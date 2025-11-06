@@ -6,13 +6,28 @@ export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
+  constructor() {
+    super({
+      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL,
+        },
+      },
+    });
+  }
+
   async onModuleInit() {
-    // En Vercel/serverless, conectar de forma lazy puede evitar timeouts
+    // En Vercel/serverless, NO conectar explícitamente
     // Prisma se conectará automáticamente en la primera query
-    // Solo conectar explícitamente si no estamos en un entorno serverless
+    // Esto evita timeouts en cold starts
     if (process.env.VERCEL) {
       console.log('🔧 Vercel environment detected - using lazy Prisma connection');
-      // En Vercel, Prisma se conectará automáticamente cuando se necesite
+      console.log('📊 DATABASE_URL configured:', !!process.env.DATABASE_URL);
+      // Verificar que la URL use el pooler de Supabase
+      if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('pooler')) {
+        console.warn('⚠️ DATABASE_URL might not be using Supabase pooler. For serverless, use: postgresql://...@...supabase.co:6543/...?pgbouncer=true');
+      }
       return;
     }
     
