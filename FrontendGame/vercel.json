@@ -1,10 +1,21 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [
+  "version": 2,
+  "projects": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "FrontendGame/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "FrontendGame/dist"
+      }
     }
+  ],
+  "builds": [
+    {
+      "src": "FrontendGame/package.json",
+      "use": "@vercel/static-build"
+    }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "FrontendGame/dist/$1" }
   ]
 }
