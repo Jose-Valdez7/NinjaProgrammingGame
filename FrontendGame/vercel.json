@@ -11,8 +11,12 @@
   ],
   "routes": [
     {
-      "src": "/(.*)",
+      "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|svg|woff|woff2|ttf|eot))",
       "dest": "FrontendGame/dist/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "FrontendGame/dist/index.html"
     }
   ]
 }

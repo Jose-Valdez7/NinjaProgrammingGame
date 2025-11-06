@@ -1,17 +1,13 @@
-import serverlessExpress from '@vendia/serverless-express';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import express from 'express';
 import { createApp } from '../src/main';
+import { VercelRequest, VercelResponse } from '@vercel/node';
 
-let server: any;
+let cachedApp: any;
 
-export const handler = async (event: any, context: any) => {
-  if (!server) {
-    const expressApp = express();
-    const nestApp = await createApp();
-    nestApp.use(expressApp);
-    await nestApp.init();
-    server = serverlessExpress({ app: expressApp });
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!cachedApp) {
+    const app = await createApp();
+    await app.init();
+    cachedApp = app.getHttpAdapter().getInstance();
   }
-  return server(event, context);
-};
+  return cachedApp(req, res);
+}
