@@ -194,14 +194,15 @@ export default function AdminPage() {
       const parsed = json as { data?: { accessToken?: string; refreshToken?: string; user?: unknown } }
       const accessToken = parsed.data?.accessToken
       const refreshToken = parsed.data?.refreshToken
-      const adminUser = parsed.data?.user as unknown
+      const adminUser = parsed.data?.user
       if (!accessToken || !adminUser) throw new Error('Respuesta de admin inválida')
 
       // Limpiar credenciales de usuario y establecer las de admin
       authStorage.clearAll()
       authStorage.setAccessToken(accessToken)
       if (refreshToken) authStorage.setRefreshToken(refreshToken)
-      authStorage.setCurrentUser(adminUser)
+      // El adminUser debe tener la estructura de User
+      authStorage.setCurrentUser(adminUser as AdminUser & { createdAt: string })
 
       setShowAdminModal(false)
       setAdminEmail('')

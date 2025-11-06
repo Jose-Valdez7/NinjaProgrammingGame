@@ -1083,11 +1083,12 @@ export class GameEngine {
     return container
   }
 
-  private addEnergyGlow(target: Container): void {
-    const glow = new Graphics()
-    glow.stroke({ color: 0xfbbf24, width: 2, alpha: 0.8 }).circle(this.cellSize / 2, this.cellSize / 2, this.cellSize / 2 - 2).stroke()
-    target.addChild(glow)
-  }
+  // Función no utilizada actualmente - comentada para evitar errores de TypeScript
+  // private addEnergyGlow(target: Container): void {
+  //   const glow = new Graphics()
+  //   glow.stroke({ color: 0xfbbf24, width: 2, alpha: 0.8 }).circle(this.cellSize / 2, this.cellSize / 2, this.cellSize / 2 - 2).stroke()
+  //   target.addChild(glow)
+  // }
 
   private ensureSnakeTextures(): Promise<void> {
     if (this.snakeTextures.length > 0) {
@@ -1399,31 +1400,32 @@ export class GameEngine {
     this.updateGuideOverlay(level, path)
   }
 
-  private createArrow(tip: { x: number; y: number }, prev: { x: number; y: number }): Graphics {
-    const arrow = new Graphics()
-    const dx = tip.x - prev.x
-    const dy = tip.y - prev.y
-    const length = Math.hypot(dx, dy) || 1
-    const nx = dx / length
-    const ny = dy / length
-    const arrowLength = this.cellSize * 0.5
-    const arrowWidth = this.cellSize * 0.4
-
-    const baseX = tip.x - nx * arrowLength
-    const baseY = tip.y - ny * arrowLength
-    const leftX = baseX + (-ny) * (arrowWidth / 2)
-    const leftY = baseY + nx * (arrowWidth / 2)
-    const rightX = baseX - (-ny) * (arrowWidth / 2)
-    const rightY = baseY - nx * (arrowWidth / 2)
-
-    arrow.fill({ color: 0xfbbf24, alpha: 0.9 })
-      .moveTo(tip.x, tip.y)
-      .lineTo(leftX, leftY)
-      .lineTo(rightX, rightY)
-      .fill()
-
-    return arrow
-  }
+  // Función no utilizada actualmente - comentada para evitar errores de TypeScript
+  // private createArrow(tip: { x: number; y: number }, prev: { x: number; y: number }): Graphics {
+  //   const arrow = new Graphics()
+  //   const dx = tip.x - prev.x
+  //   const dy = tip.y - prev.y
+  //   const length = Math.hypot(dx, dy) || 1
+  //   const nx = dx / length
+  //   const ny = dy / length
+  //   const arrowLength = this.cellSize * 0.5
+  //   const arrowWidth = this.cellSize * 0.4
+  //
+  //   const baseX = tip.x - nx * arrowLength
+  //   const baseY = tip.y - ny * arrowLength
+  //   const leftX = baseX + (-ny) * (arrowWidth / 2)
+  //   const leftY = baseY + nx * (arrowWidth / 2)
+  //   const rightX = baseX - (-ny) * (arrowWidth / 2)
+  //   const rightY = baseY - nx * (arrowWidth / 2)
+  //
+  //   arrow.fill({ color: 0xfbbf24, alpha: 0.9 })
+  //     .moveTo(tip.x, tip.y)
+  //     .lineTo(leftX, leftY)
+  //     .lineTo(rightX, rightY)
+  //     .fill()
+  //
+  //   return arrow
+  // }
 
   private cellCenter(pos: { x: number; y: number }): { x: number; y: number } {
     return {
@@ -1525,7 +1527,7 @@ export class GameEngine {
     }
   }
 
-  public async animateNinjaMovement(fromX: number, fromY: number, toX: number, toY: number): Promise<void> {
+  public async animateNinjaMovement(_fromX: number, _fromY: number, toX: number, toY: number): Promise<void> {
     await this.ensureSpineNinja()
     const animation = this.ninjaEnergized ? 'hoverboard' : 'walk'
     this.playNinjaAnimation(animation, true)

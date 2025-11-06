@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LogIn, Home } from 'lucide-react'
-import { apiUrl, authStorage } from '../config/env'
+import { apiUrl, authStorage, getAuthHeaders } from '../config/env'
 import { useGameStore } from '../store/GameStore'
 import { normalizeLoginError } from '../utils/errorMessages'
-import { flushOfflineProgress, type OfflineProgressEntry, clearOfflineProgress } from '../utils/offlineProgress'
+import { flushOfflineProgress, type OfflineProgressEntry } from '../utils/offlineProgress'
 
 export default function LoginPage() {
   const { dispatch } = useGameStore()
