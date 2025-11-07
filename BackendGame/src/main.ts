@@ -5,6 +5,10 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/exceptions/global-exception.filter';
 
+console.log('🔧 Vercel env:', process.env.VERCEL);
+console.log('🌍 NODE_ENV:', process.env.NODE_ENV);
+console.log('🔗 DATABASE_URL (truncada):', process.env.DATABASE_URL?.slice(0, 40) + '...');
+
 export async function createApp() {
   const app = await NestFactory.create(AppModule);
 

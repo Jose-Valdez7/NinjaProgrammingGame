@@ -1,12 +1,13 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
+// 🧠 Usamos una referencia global para que Prisma no se cree en cada invocación (importante para Vercel)
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+
 @Injectable()
-export class PrismaService
-  extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
+    // Configura los logs y la conexión
     super({
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
       datasources: {
@@ -18,46 +19,52 @@ export class PrismaService
   }
 
   async onModuleInit() {
-    // En Vercel/serverless, NO conectar explícitamente
-    // Prisma se conectará automáticamente en la primera query
-    // Esto evita timeouts en cold starts
+    // ⚙️ En Vercel, Prisma usa lazy connection (no llamamos a $connect directamente)
     if (process.env.VERCEL) {
-      console.log('🔧 Vercel environment detected - using lazy Prisma connection');
-      console.log('📊 DATABASE_URL configured:', !!process.env.DATABASE_URL);
-      // Verificar que la URL use el pooler de Supabase
-      if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('pooler')) {
-        console.warn('⚠️ DATABASE_URL might not be using Supabase pooler. For serverless, use: postgresql://...@...supabase.co:6543/...?pgbouncer=true');
+      if (!globalForPrisma.prisma) {
+        console.log('🧩 Inicializando Prisma singleton en Vercel...');
+        globalForPrisma.prisma = this;
+      } else {
+        console.log('♻️ Reusando Prisma singleton existente (Vercel)');
+        return globalForPrisma.prisma;
       }
+
+      console.log('📊 DATABASE_URL configurada:', !!process.env.DATABASE_URL);
+      if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('pooler')) {
+        console.warn('⚠️ DATABASE_URL no usa pooler. Usa el puerto 6543 y el pooler de Supabase.');
+      }
+
+      // Verificamos conexión mínima
+      try {
+        await this.$queryRaw`SELECT 1`;
+        console.log('✅ Prisma conectado correctamente a la base de datos (lazy mode)');
+      } catch (err) {
+        console.error('❌ Error de conexión en Vercel:', err);
+      }
+
       return;
     }
-    
-    // En desarrollo/local, conectar inmediatamente
+
+    // 🧩 En local o dev, conectamos inmediatamente
     try {
       await this.$connect();
-      console.log('✅ Prisma connected to database');
+      console.log('✅ Prisma conectado a la base de datos (modo local)');
     } catch (error: any) {
-      console.error('❌ Prisma connection error:', error?.message);
-      console.error('DATABASE_URL present:', !!process.env.DATABASE_URL);
-      // Lanzar el error solo en desarrollo
+      console.error('❌ Error conectando Prisma:', error?.message);
       throw error;
     }
   }
 
   async onModuleDestroy() {
-    // Desconectar de la base de datos cuando el módulo se destruya
     await this.$disconnect();
   }
 
-  // Método helper para limpiar la base de datos (útil para testing)
+  // 🧹 Helper opcional
   async cleanDatabase() {
     if (process.env.NODE_ENV === 'production') return;
-
     const models = Reflect.ownKeys(this).filter(
       (key) => typeof key === 'string' && key[0] !== '_',
     ) as string[];
-
-    return Promise.all(
-      models.map((modelKey) => (this as any)[modelKey].deleteMany()),
-    );
+    return Promise.all(models.map((modelKey) => (this as any)[modelKey].deleteMany()));
   }
 }
