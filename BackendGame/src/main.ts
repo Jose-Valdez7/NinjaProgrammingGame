@@ -80,6 +80,18 @@ export async function createApp() {
   // Global prefix
   app.setGlobalPrefix('api');
 
+  // Middleware de logging para todos los requests (antes de cualquier otro middleware)
+  app.use((req: any, res: any, next: any) => {
+    console.log(`🌐 [Express Middleware] Request recibido: ${req.method} ${req.url}`);
+    console.log(`🌐 [Express Middleware] Headers:`, {
+      'content-type': req.headers['content-type'],
+      'origin': req.headers.origin,
+      'authorization': req.headers.authorization ? 'present' : 'missing',
+    });
+    console.log(`🌐 [Express Middleware] Body:`, req.body ? JSON.stringify(req.body).substring(0, 100) : 'empty');
+    next();
+  });
+
   // Swagger configuration
   const config = new DocumentBuilder()
     .setTitle('Ninja Energy Quest API')

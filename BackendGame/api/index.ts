@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { Request, Response } from 'express';
+import * as express from 'express';
 import { createApp } from '../src/main';
 
 let cachedApp: INestApplication | null = null;
@@ -50,6 +51,28 @@ export default async function handler(req: Request, res: Response): Promise<void
     if (!expressApp) {
       throw new Error('No se pudo obtener la instancia de Express de NestJS');
     }
+
+    // Parsear el body del request si no está parseado (necesario en Vercel)
+    // Esto debe hacerse dentro de la promesa para asegurar que se complete antes de pasar a NestJS
+    await new Promise<void>((resolveParse, rejectParse) => {
+      if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+        if (!req.body && req.headers['content-type']?.includes('application/json')) {
+          console.log('📦 Parseando body del request...');
+          // Usar el body parser de Express
+          express.json()(req, res, (err?: any) => {
+            if (err) {
+              console.error('❌ Error parseando body:', err);
+              rejectParse(err);
+              return;
+            }
+            console.log('✅ Body parseado:', req.body ? JSON.stringify(req.body).substring(0, 100) : 'empty');
+            resolveParse();
+          });
+          return;
+        }
+      }
+      resolveParse();
+    });
 
     // Envolver en una promesa para asegurar que la respuesta se complete correctamente
     await new Promise<void>((resolve, reject) => {
@@ -116,6 +139,11 @@ export default async function handler(req: Request, res: Response): Promise<void
       // Esto es más confiable que usar Express directamente
       try {
         console.log(`🔄 Pasando request a NestJS: ${req.method} ${req.url}`);
+        console.log(`🔄 Request body:`, req.body ? JSON.stringify(req.body).substring(0, 200) : 'empty');
+        console.log(`🔄 Request headers:`, {
+          'content-type': req.headers['content-type'],
+          'origin': req.headers.origin,
+        });
         
         // Usar el método getHttpAdapter para obtener el handler HTTP de NestJS
         const httpAdapter = cachedApp.getHttpAdapter();
@@ -125,6 +153,27 @@ export default async function handler(req: Request, res: Response): Promise<void
         instance.on('error', (err: Error) => {
           console.error('❌ Error en Express instance:', err);
         });
+        
+        // Verificar que el request tenga el body parseado
+        if (req.method === 'POST' && !req.body && req.headers['content-type']?.includes('application/json')) {
+          console.warn('⚠️ Request body no parseado, intentando parsear...');
+          let body = '';
+          req.on('data', (chunk: Buffer) => {
+            body += chunk.toString();
+          });
+          req.on('end', () => {
+            try {
+              req.body = JSON.parse(body);
+              console.log('✅ Body parseado:', req.body);
+              instance(req, res);
+            } catch (err) {
+              console.error('❌ Error parseando body:', err);
+              res.status(400).json({ error: 'Invalid JSON' });
+              resolve();
+            }
+          });
+          return;
+        }
         
         // Pasar el request a Express
         instance(req, res);
