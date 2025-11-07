@@ -126,15 +126,40 @@ export default async function handler(req: Request, res: Response): Promise<void
         
         // Usar el método getHttpAdapter para obtener el handler HTTP de NestJS
         const httpAdapter = cachedApp.getHttpAdapter();
-        const instance = httpAdapter.getInstance();
         
-        console.log(`🔍 Express instance obtenida, tipo: ${typeof instance}`);
-        console.log(`🔍 Express instance tiene método 'handle': ${typeof (instance as any).handle}`);
+        // Intentar obtener el servidor HTTP directamente
+        let instance: any;
+        try {
+          // Primero intentar obtener el servidor HTTP
+          const httpServer = cachedApp.getHttpServer();
+          console.log(`🔍 HTTP Server obtenido, tipo: ${typeof httpServer}`);
+          
+          // Si tenemos el servidor HTTP, usar su método 'emit' o 'listeners'
+          if (httpServer && typeof (httpServer as any).emit === 'function') {
+            console.log('📤 Usando HTTP Server directamente...');
+            instance = httpServer;
+          } else {
+            // Si no, usar la instancia Express
+            instance = httpAdapter.getInstance();
+            console.log(`🔍 Express instance obtenida, tipo: ${typeof instance}`);
+          }
+        } catch (err) {
+          // Si falla, usar la instancia Express normal
+          instance = httpAdapter.getInstance();
+          console.log(`🔍 Usando Express instance (fallback), tipo: ${typeof instance}`);
+        }
+        
+        console.log(`🔍 Instance final, tipo: ${typeof instance}`);
+        console.log(`🔍 Instance tiene método 'handle': ${typeof (instance as any).handle}`);
+        console.log(`🔍 Instance tiene método 'emit': ${typeof (instance as any).emit}`);
+        console.log(`🔍 Instance tiene método 'listen': ${typeof (instance as any).listen}`);
         
         // Agregar listener para errores no capturados
-        instance.on('error', (err: Error) => {
-          console.error('❌ Error en Express instance:', err);
-        });
+        if (instance && typeof instance.on === 'function') {
+          instance.on('error', (err: Error) => {
+            console.error('❌ Error en instance:', err);
+          });
+        }
         
         // Pasar el request directamente a Express de NestJS
         // En Vercel, necesitamos asegurarnos de que el request se procese correctamente
@@ -190,35 +215,48 @@ export default async function handler(req: Request, res: Response): Promise<void
             method: req.method,
           });
           
-          // En Vercel, necesitamos usar el método handle() si está disponible
-          // o pasar el request directamente a la aplicación Express
-          if (typeof (instance as any).handle === 'function') {
-            console.log('📤 Usando instance.handle()...');
-            (instance as any).handle(req, res);
-          } else {
-            // Si no tiene handle, usar la aplicación Express directamente
-            // pero necesitamos asegurarnos de que el request tenga el formato correcto
-            console.log('📤 Usando aplicación Express directamente...');
-            
-            // Crear un wrapper para el request si es necesario
-            // Express espera que el request tenga ciertas propiedades
-            const expressReq = req as any;
-            if (!expressReq.route) {
-              expressReq.route = null;
-            }
-            
-            // Llamar a la aplicación Express
-            instance(req, res, (err?: any) => {
+          // En Vercel, necesitamos llamar a la aplicación Express directamente como función
+          // No usar handle(), sino llamar a la aplicación Express como middleware
+          console.log('📤 Llamando aplicación Express directamente como función...');
+          
+          // La aplicación Express es una función que acepta (req, res, next)
+          // Necesitamos llamarla directamente
+          try {
+            // Llamar a Express como función con callback para detectar cuando termina
+            const expressResult = instance(req, res, (err?: any) => {
               if (err) {
                 console.error('❌ Error en callback de Express:', err);
+                console.error('Stack:', err.stack);
                 if (!res.headersSent) {
                   res.status(500).json({ error: err.message });
                 }
                 reject(err);
               } else {
-                console.log('✅ Express callback ejecutado sin errores');
+                console.log('✅ Express callback ejecutado (sin errores, pero puede que no haya procesado el request)');
+                // Si no hay error pero tampoco se envió respuesta, puede que Express no procesó el request
+                if (!res.headersSent && !res.finished) {
+                  console.warn('⚠️ Express callback ejecutado pero no se envió respuesta');
+                }
               }
             });
+            
+            console.log('📤 Express llamado, resultado:', typeof expressResult);
+            
+            // Si Express retorna algo, podría ser una promesa
+            if (expressResult && typeof expressResult.then === 'function') {
+              expressResult.catch((err: any) => {
+                console.error('❌ Error en promesa de Express:', err);
+                reject(err);
+              });
+            }
+          } catch (expressErr: any) {
+            console.error('❌ Error al llamar Express:', expressErr);
+            console.error('Stack:', expressErr.stack);
+            if (!res.headersSent) {
+              res.status(500).json({ error: 'Error calling Express', message: expressErr.message });
+            }
+            reject(expressErr);
+            return;
           }
           
           console.log('📤 Express instance llamada');

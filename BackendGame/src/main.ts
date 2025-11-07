@@ -81,15 +81,20 @@ export async function createApp() {
   app.setGlobalPrefix('api');
 
   // Middleware de logging para todos los requests (antes de cualquier otro middleware)
+  // Este middleware DEBE ejecutarse para cualquier request que llegue a Express
   app.use((req: any, res: any, next: any) => {
+    console.log(`🌐 [Express Middleware] ⚠️⚠️⚠️ MIDDLEWARE EJECUTADO ⚠️⚠️⚠️`);
     console.log(`🌐 [Express Middleware] Request recibido: ${req.method} ${req.url}`);
+    console.log(`🌐 [Express Middleware] Path: ${req.path}, OriginalUrl: ${req.originalUrl}`);
     console.log(`🌐 [Express Middleware] Headers:`, {
       'content-type': req.headers['content-type'],
       'origin': req.headers.origin,
       'authorization': req.headers.authorization ? 'present' : 'missing',
     });
     console.log(`🌐 [Express Middleware] Body:`, req.body ? JSON.stringify(req.body).substring(0, 100) : 'empty');
+    console.log(`🌐 [Express Middleware] Llamando next()...`);
     next();
+    console.log(`🌐 [Express Middleware] next() llamado, continuando...`);
   });
 
   // Swagger configuration
