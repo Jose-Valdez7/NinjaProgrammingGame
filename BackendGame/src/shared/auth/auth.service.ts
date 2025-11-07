@@ -105,25 +105,34 @@ export class AuthService {
 
   async login(loginUserDto: LoginUserDto): Promise<BaseResponseDto<any>> {
     try {
+      console.log('🔐 Iniciando proceso de login...');
       const { email, cedula } = loginUserDto;
+      console.log(`📧 Email recibido: ${email}`);
 
       // Buscar el usuario en la base de datos
+      console.log('🔍 Buscando usuario en la base de datos...');
       const user = await this.prismaService.user.findUnique({
         where: { email },
       });
+      console.log(`✅ Consulta a base de datos completada. Usuario encontrado: ${!!user}`);
 
       if (!user) {
+        console.log('❌ Usuario no encontrado');
         throw new UsernameNotFoundException('Credenciales inválidas');
       }
 
       // Verificar cédula
       // La cédula se compara directamente ya que se almacena sin hashear
+      console.log('🔐 Verificando cédula...');
       if (user.cedula !== cedula) {
+        console.log('❌ Cédula inválida');
         throw new UnauthorizedException('Cedula inválida');
       }
       
       // Generar tokens para el usuario
+      console.log('🎫 Generando tokens...');
       const tokens = await this.generateTokens(user);
+      console.log('✅ Tokens generados exitosamente');
 
       const userResponse = {
         user: {
@@ -138,21 +147,28 @@ export class AuthService {
         ...tokens,
       };
 
-      return {
+      console.log('📤 Preparando respuesta de login exitoso...');
+      const response = {
         status: HttpStatus.OK,
         message: 'Inicio de sesión exitoso',
         data: userResponse,
         timestamp: new Date().toISOString(),
       };
+      console.log('✅ Respuesta de login preparada, retornando...');
+      return response;
     } catch (error) {
+      console.error('❌ Error en proceso de login:', error);
       if (error instanceof UsernameNotFoundException) {
+        console.log('🚫 Lanzando UsernameNotFoundException');
         throw error;
       }
       if (error instanceof UnauthorizedException) {
+        console.log('🚫 Lanzando UnauthorizedException');
         throw error;
       }
 
       this.loggerService.error('Error en el inicio de sesión', error);
+      console.log('🚫 Lanzando BadRequestException');
       throw new BadRequestException('Error en el inicio de sesión');
     }
   }
