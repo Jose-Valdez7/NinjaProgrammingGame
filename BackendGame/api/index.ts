@@ -161,10 +161,76 @@ export default async function handler(req: Request, res: Response): Promise<void
             return;
           }
           
-          // Usar el método call de Express directamente
-          // Esto debería funcionar en Vercel
-          const expressResult = instance(req, res);
-          console.log('📤 Express instance llamada, resultado:', typeof expressResult);
+          // Asegurar que el request tenga las propiedades necesarias para Express
+          // En Vercel, estas propiedades pueden no estar establecidas
+          let requestUrl = req.url || '';
+          
+          // Si la URL ya incluye /api, no duplicar (NestJS ya tiene el prefijo global /api)
+          // Pero si viene como /api/auth/login, necesitamos mantenerlo así
+          if (!(req as any).path) {
+            (req as any).path = requestUrl.split('?')[0] || requestUrl;
+          }
+          if (!(req as any).originalUrl) {
+            (req as any).originalUrl = requestUrl;
+          }
+          if (!(req as any).baseUrl) {
+            (req as any).baseUrl = '';
+          }
+          
+          // Asegurar que req.url esté establecido correctamente
+          if (!req.url) {
+            req.url = requestUrl;
+          }
+          
+          console.log('📤 Request preparado para Express:', {
+            url: req.url,
+            path: (req as any).path,
+            originalUrl: (req as any).originalUrl,
+            baseUrl: (req as any).baseUrl,
+            method: req.method,
+          });
+          
+          // En Vercel, necesitamos usar el método handle() si está disponible
+          // o pasar el request directamente a la aplicación Express
+          if (typeof (instance as any).handle === 'function') {
+            console.log('📤 Usando instance.handle()...');
+            (instance as any).handle(req, res);
+          } else {
+            // Si no tiene handle, usar la aplicación Express directamente
+            // pero necesitamos asegurarnos de que el request tenga el formato correcto
+            console.log('📤 Usando aplicación Express directamente...');
+            
+            // Crear un wrapper para el request si es necesario
+            // Express espera que el request tenga ciertas propiedades
+            const expressReq = req as any;
+            if (!expressReq.route) {
+              expressReq.route = null;
+            }
+            
+            // Llamar a la aplicación Express
+            instance(req, res, (err?: any) => {
+              if (err) {
+                console.error('❌ Error en callback de Express:', err);
+                if (!res.headersSent) {
+                  res.status(500).json({ error: err.message });
+                }
+                reject(err);
+              } else {
+                console.log('✅ Express callback ejecutado sin errores');
+              }
+            });
+          }
+          
+          console.log('📤 Express instance llamada');
+          
+          // Verificar inmediatamente si Express procesó el request
+          setImmediate(() => {
+            console.log('🔍 Estado después de Express:', {
+              headersSent: res.headersSent,
+              finished: res.finished,
+              statusCode: res.statusCode,
+            });
+          });
           
         } catch (err: any) {
           console.error('❌ Error al pasar request a Express:', err);
