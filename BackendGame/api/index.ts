@@ -52,27 +52,6 @@ export default async function handler(req: Request, res: Response): Promise<void
       throw new Error('No se pudo obtener la instancia de Express de NestJS');
     }
 
-    // Parsear el body del request si no está parseado (necesario en Vercel)
-    // Esto debe hacerse dentro de la promesa para asegurar que se complete antes de pasar a NestJS
-    await new Promise<void>((resolveParse, rejectParse) => {
-      if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-        if (!req.body && req.headers['content-type']?.includes('application/json')) {
-          console.log('📦 Parseando body del request...');
-          // Usar el body parser de Express
-          express.json()(req, res, (err?: any) => {
-            if (err) {
-              console.error('❌ Error parseando body:', err);
-              rejectParse(err);
-              return;
-            }
-            console.log('✅ Body parseado:', req.body ? JSON.stringify(req.body).substring(0, 100) : 'empty');
-            resolveParse();
-          });
-          return;
-        }
-      }
-      resolveParse();
-    });
 
     // Envolver en una promesa para asegurar que la respuesta se complete correctamente
     await new Promise<void>((resolve, reject) => {
@@ -149,36 +128,55 @@ export default async function handler(req: Request, res: Response): Promise<void
         const httpAdapter = cachedApp.getHttpAdapter();
         const instance = httpAdapter.getInstance();
         
+        console.log(`🔍 Express instance obtenida, tipo: ${typeof instance}`);
+        console.log(`🔍 Express instance tiene método 'handle': ${typeof (instance as any).handle}`);
+        
         // Agregar listener para errores no capturados
         instance.on('error', (err: Error) => {
           console.error('❌ Error en Express instance:', err);
         });
         
-        // Verificar que el request tenga el body parseado
-        if (req.method === 'POST' && !req.body && req.headers['content-type']?.includes('application/json')) {
-          console.warn('⚠️ Request body no parseado, intentando parsear...');
-          let body = '';
-          req.on('data', (chunk: Buffer) => {
-            body += chunk.toString();
-          });
-          req.on('end', () => {
-            try {
-              req.body = JSON.parse(body);
-              console.log('✅ Body parseado:', req.body);
-              instance(req, res);
-            } catch (err) {
-              console.error('❌ Error parseando body:', err);
-              res.status(400).json({ error: 'Invalid JSON' });
-              resolve();
+        // Pasar el request directamente a Express de NestJS
+        // En Vercel, necesitamos asegurarnos de que el request se procese correctamente
+        try {
+          console.log('📤 Pasando request a Express de NestJS...');
+          console.log('📤 Request details:', {
+            method: req.method,
+            url: req.url,
+            path: (req as any).path,
+            originalUrl: (req as any).originalUrl,
+            hasBody: !!req.body,
+            bodyKeys: req.body ? Object.keys(req.body) : [],
+            headers: {
+              'content-type': req.headers['content-type'],
+              'content-length': req.headers['content-length'],
             }
           });
+          
+          // Verificar que Express tenga el método correcto
+          if (typeof instance !== 'function') {
+            console.error('❌ Express instance no es una función:', typeof instance);
+            res.status(500).json({ error: 'Express instance invalid' });
+            resolve();
+            return;
+          }
+          
+          // Usar el método call de Express directamente
+          // Esto debería funcionar en Vercel
+          const expressResult = instance(req, res);
+          console.log('📤 Express instance llamada, resultado:', typeof expressResult);
+          
+        } catch (err: any) {
+          console.error('❌ Error al pasar request a Express:', err);
+          console.error('Stack:', err.stack);
+          if (!res.headersSent) {
+            res.status(500).json({ error: 'Internal Server Error', message: err.message });
+          }
+          reject(err);
           return;
         }
         
-        // Pasar el request a Express
-        instance(req, res);
-        
-        console.log(`📤 Request pasado a Express, esperando respuesta...`);
+        console.log(`📤 Request pasado a NestJS, esperando respuesta...`);
         
         // Polling para verificar si la respuesta se completó
         // Esto es necesario porque en Vercel los eventos pueden no dispararse correctamente
