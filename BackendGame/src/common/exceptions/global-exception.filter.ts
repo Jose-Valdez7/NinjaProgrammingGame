@@ -28,6 +28,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest();
 
+    // Log del error para debugging
+    console.error(`🚨 GlobalExceptionFilter capturó un error: ${request.method} ${request.url}`, exception);
+
     let status: HttpStatus;
     let message: string;
 
@@ -94,7 +97,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       request.url,
     );
 
-    response.status(status).json(errorBody);
+    console.log(`📤 Enviando respuesta de error: ${request.method} ${request.url} - Status: ${status}, Message: ${message}`);
+    
+    // Asegurar que la respuesta se envíe
+    if (!response.headersSent) {
+      response.status(status).json(errorBody);
+      console.log(`✅ Respuesta de error enviada: ${request.method} ${request.url}`);
+    } else {
+      console.warn(`⚠️ Headers ya enviados, no se puede enviar respuesta de error: ${request.method} ${request.url}`);
+    }
   }
 
   private buildResponse(

@@ -112,10 +112,24 @@ export default async function handler(req: Request, res: Response): Promise<void
       res.once('close', onClose);
       res.once('error', onError);
 
-      // Redirigir el request a NestJS (Express)
-      // No usar callback, dejar que Express maneje la respuesta directamente
+      // Redirigir el request a NestJS usando el método HTTP adapter
+      // Esto es más confiable que usar Express directamente
       try {
-        expressApp(req, res);
+        console.log(`🔄 Pasando request a NestJS: ${req.method} ${req.url}`);
+        
+        // Usar el método getHttpAdapter para obtener el handler HTTP de NestJS
+        const httpAdapter = cachedApp.getHttpAdapter();
+        const instance = httpAdapter.getInstance();
+        
+        // Agregar listener para errores no capturados
+        instance.on('error', (err: Error) => {
+          console.error('❌ Error en Express instance:', err);
+        });
+        
+        // Pasar el request a Express
+        instance(req, res);
+        
+        console.log(`📤 Request pasado a Express, esperando respuesta...`);
         
         // Polling para verificar si la respuesta se completó
         // Esto es necesario porque en Vercel los eventos pueden no dispararse correctamente
@@ -130,11 +144,18 @@ export default async function handler(req: Request, res: Response): Promise<void
           }
           
           // Verificar si la respuesta se completó
-          if (res.headersSent || res.finished) {
-            console.log(`✅ Response completada (polling, intento ${pollCount}): ${req.method} ${req.url} - Status: ${res.statusCode}`);
+          const isComplete = res.headersSent || res.finished || res.writableEnded || !res.writable;
+          
+          if (isComplete) {
+            console.log(`✅ Response completada (polling, intento ${pollCount}): ${req.method} ${req.url} - Status: ${res.statusCode || 'unknown'}, headersSent: ${res.headersSent}, finished: ${res.finished}`);
             cleanup();
             resolve();
             return;
+          }
+          
+          // Log cada 20 intentos (cada segundo) para debugging
+          if (pollCount % 20 === 0) {
+            console.log(`⏳ Esperando respuesta... (${pollCount}/${maxPolls}): ${req.method} ${req.url} - headersSent: ${res.headersSent}, finished: ${res.finished}, writable: ${res.writable}`);
           }
           
           // Si alcanzamos el máximo de polls, el timeout se encargará
@@ -145,16 +166,20 @@ export default async function handler(req: Request, res: Response): Promise<void
         
         // También verificar inmediatamente
         setImmediate(() => {
-          if (!resolved && (res.headersSent || res.finished)) {
-            console.log(`✅ Response ya completada (verificación inmediata): ${req.method} ${req.url}`);
-            if (pollInterval) clearInterval(pollInterval);
-            cleanup();
-            resolve();
+          if (!resolved) {
+            const isComplete = res.headersSent || res.finished || res.writableEnded || !res.writable;
+            if (isComplete) {
+              console.log(`✅ Response ya completada (verificación inmediata): ${req.method} ${req.url} - Status: ${res.statusCode || 'unknown'}`);
+              if (pollInterval) clearInterval(pollInterval);
+              cleanup();
+              resolve();
+            }
           }
         });
       } catch (err: any) {
         cleanup();
         console.error('❌ Error ejecutando Express app:', err);
+        console.error('Stack:', err.stack);
         if (!res.headersSent) {
           res.status(500).json({
             message: 'Internal Server Error',
