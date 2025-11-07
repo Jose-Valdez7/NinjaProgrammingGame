@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { GlobalExceptionFilter } from './common/exceptions/global-exception.filter';
 
 export async function createApp() {
   const app = await NestFactory.create(AppModule);
@@ -72,6 +73,9 @@ export async function createApp() {
       transform: true,
     }),
   );
+
+  // Global exception filter
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   // Global prefix
   app.setGlobalPrefix('api');
