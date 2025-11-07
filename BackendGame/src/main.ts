@@ -17,51 +17,39 @@ export async function createApp() {
   const nodeEnv = configService.get('NODE_ENV') || 'development';
   const allowedOrigins = configService.get('ALLOWED_ORIGINS');
 
-  // Función para validar si un origen es de Vercel
+  // 🔹 Función para validar orígenes permitidos
   const isVercelOrigin = (origin: string | undefined): boolean => {
     if (!origin) return false;
-    return origin.includes('.vercel.app') || origin.includes('localhost');
+    return (
+      origin.includes('.vercel.app') ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1')
+    );
   };
-  
-  // Enable CORS
-  let corsOrigin: string | boolean | string[] | ((origin: string | undefined) => boolean) = true;
-  
+
+  // 🔹 Configuración dinámica de CORS
+  let corsOrigin: string[] | ((origin: string | undefined, callback: Function) => void);
+
   if (nodeEnv === 'production') {
-    // En producción, usar función de validación que permita Vercel
-    if (allowedOrigins) {
-      const configuredOrigins = allowedOrigins.split(',').map(origin => origin.trim());
-      corsOrigin = (origin: string | undefined) => {
-        if (!origin) return false;
-        // Permitir orígenes configurados o cualquier URL de Vercel
-        return configuredOrigins.includes(origin) || isVercelOrigin(origin);
-      };
-    } else if (frontendUrl) {
-      corsOrigin = (origin: string | undefined) => {
-        if (!origin) return false;
-        // Permitir FRONTEND_URL o cualquier URL de Vercel
-        return origin === frontendUrl || isVercelOrigin(origin);
-      };
-    } else {
-      // Si no hay configuración, permitir todos los orígenes de Vercel
-      corsOrigin = (origin: string | undefined) => {
-        return isVercelOrigin(origin);
-      };
-      console.warn('⚠️ No FRONTEND_URL or ALLOWED_ORIGINS configured, allowing all Vercel origins');
-    }
+    corsOrigin = (origin, callback) => {
+      if (!origin) return callback(null, false);
+      const allowed =
+        isVercelOrigin(origin) ||
+        origin === frontendUrl ||
+        (allowedOrigins && allowedOrigins.split(',').includes(origin));
+      if (allowed) callback(null, true);
+      else callback(new Error(`Origin ${origin} not allowed by CORS`), false);
+    };
   } else {
-    // En desarrollo, permitir localhost y otros orígenes comunes
     corsOrigin = [
       'http://localhost:3000',
-      'http://localhost:5173',
       'http://127.0.0.1:3000',
+      'http://localhost:5173',
       'http://127.0.0.1:5173',
     ];
-    if (allowedOrigins) {
-      const additionalOrigins = allowedOrigins.split(',').map(origin => origin.trim());
-      corsOrigin = [...(corsOrigin as string[]), ...additionalOrigins];
-    }
   }
 
+  // 🔹 Activar CORS globalmente
   app.enableCors({
     origin: corsOrigin,
     credentials: true,
@@ -69,7 +57,7 @@ export async function createApp() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Global validation pipe
+  // 🔹 Pipes y filtros globales
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -78,33 +66,21 @@ export async function createApp() {
     }),
   );
 
-  // Global exception filter
   app.useGlobalFilters(new GlobalExceptionFilter());
-
-  // Global prefix
   app.setGlobalPrefix('api');
 
-  // Middleware de logging para todos los requests (antes de cualquier otro middleware)
-  // Este middleware DEBE ejecutarse para cualquier request que llegue a Express
-  app.use((req: any, res: any, next: any) => {
-    console.log(`🌐 [Express Middleware] ⚠️⚠️⚠️ MIDDLEWARE EJECUTADO ⚠️⚠️⚠️`);
-    console.log(`🌐 [Express Middleware] Request recibido: ${req.method} ${req.url}`);
-    console.log(`🌐 [Express Middleware] Path: ${req.path}, OriginalUrl: ${req.originalUrl}`);
-    console.log(`🌐 [Express Middleware] Headers:`, {
-      'content-type': req.headers['content-type'],
-      'origin': req.headers.origin,
-      'authorization': req.headers.authorization ? 'present' : 'missing',
+  // 🔹 Middleware de logging para debugging (solo en desarrollo)
+  if (nodeEnv !== 'production') {
+    app.use((req, res, next) => {
+      console.log(`🛰️ [${req.method}] ${req.url}`);
+      next();
     });
-    console.log(`🌐 [Express Middleware] Body:`, req.body ? JSON.stringify(req.body).substring(0, 100) : 'empty');
-    console.log(`🌐 [Express Middleware] Llamando next()...`);
-    next();
-    console.log(`🌐 [Express Middleware] next() llamado, continuando...`);
-  });
+  }
 
-  // Swagger configuration
+  // 🔹 Swagger
   const config = new DocumentBuilder()
     .setTitle('Ninja Energy Quest API')
-    .setDescription('API documentation for Ninja Energy Quest game')
+    .setDescription('API documentation for Ninja Energy Quest')
     .setVersion('1.0')
     .addBearerAuth(
       {
@@ -112,7 +88,6 @@ export async function createApp() {
         scheme: 'bearer',
         bearerFormat: 'JWT',
         name: 'JWT',
-        description: 'Enter JWT token',
         in: 'header',
       },
       'JWT-auth',
@@ -125,12 +100,12 @@ export async function createApp() {
   return app;
 }
 
-// Solo ejecuta el servidor localmente (NO en Vercel)
+// 🔹 Solo iniciar servidor local (Vercel no ejecuta esto)
 if (!process.env.VERCEL) {
   createApp().then(async (app) => {
     const port = process.env.PORT || 3001;
     await app.listen(port);
-    console.log(`🚀 Ninja Energy Quest API running on http://localhost:${port}/api`);
-    console.log(`📚 Swagger docs on http://localhost:${port}/api-docs`);
+    console.log(`🚀 API running on http://localhost:${port}/api`);
+    console.log(`📚 Docs on http://localhost:${port}/api-docs`);
   });
 }
