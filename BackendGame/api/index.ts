@@ -1,7 +1,8 @@
+import type { INestApplication } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { createApp } from '../src/main';
 
-let cachedApp: any = null;
+let cachedApp: INestApplication | null = null;
 
 // Este handler lo ejecuta Vercel en cada request
 export default async function handler(req: Request, res: Response) {
@@ -10,6 +11,7 @@ export default async function handler(req: Request, res: Response) {
     if (!cachedApp) {
       console.log('🚀 Inicializando NestJS app...');
       cachedApp = await createApp();
+      await cachedApp.init();
       console.log('✅ App inicializada correctamente');
     }
 
