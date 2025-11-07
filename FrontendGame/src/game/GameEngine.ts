@@ -62,8 +62,7 @@ type DoorCoverage = {
 }
 
 const computeDoorCoverage = (
-  level: GameLevel | null | undefined,
-  gridSize: number
+  level: GameLevel | null | undefined
 ): DoorCoverage => {
   const overlayKeys = new Set<string>()
   let mainKey: string | null = null
@@ -85,19 +84,6 @@ const computeDoorCoverage = (
   if (doorPosition) {
     const { x, y } = doorPosition
     mainKey = positionKey(x, y)
-
-    for (let dy = 0; dy <= 1; dy++) {
-      for (let dx = 0; dx <= 1; dx++) {
-        const nx = x + dx
-        const ny = y + dy
-
-        if (nx >= gridSize || ny >= gridSize) continue
-
-        if (dx === 0 && dy === 0) continue
-
-        overlayKeys.add(positionKey(nx, ny))
-      }
-    }
   }
 
   return { mainKey, overlayKeys }
@@ -148,7 +134,7 @@ class NativeCanvasRenderer {
     this.level = level
     this.ninjaX = level.startPosition.x
     this.ninjaY = level.startPosition.y
-    this.doorCoverage = computeDoorCoverage(level, this.gridSize)
+    this.doorCoverage = computeDoorCoverage(level)
     this.persistentEnergized = false
     this.startSnakeAnimation()
     this.startDoorAnimation()
@@ -752,8 +738,7 @@ class NativeCanvasRenderer {
           if (!frame.complete) {
             frame.onload = () => this.render()
           } else {
-            const drawSize = this.cellSize * 2
-            this.ctx.drawImage(frame, pixelX, pixelY, drawSize, drawSize)
+            this.ctx.drawImage(frame, pixelX, pixelY, this.cellSize, this.cellSize)
           }
         }
 
@@ -1190,7 +1175,7 @@ export class GameEngine {
     await this.ensureSnakeTextures()
     await this.ensureDoorTextures()
     await this.ensureBaseTileTextures()
-    this.doorCoverage = computeDoorCoverage(level, this.gridSize)
+    this.doorCoverage = computeDoorCoverage(level)
 
     if (!this.pixiApp) {
       console.error('Renderer no disponible al cargar nivel')
@@ -1300,8 +1285,8 @@ export class GameEngine {
           doorSprite.animationSpeed = 0.06
           doorSprite.loop = true
           doorSprite.play()
-          doorSprite.width = this.cellSize * 2
-          doorSprite.height = this.cellSize * 2
+          doorSprite.width = this.cellSize
+          doorSprite.height = this.cellSize
           doorSprite.x = x * this.cellSize
           doorSprite.y = y * this.cellSize
           doorSprite.zIndex = 6
@@ -1952,8 +1937,8 @@ export class GameEngine {
           doorSprite.animationSpeed = 0.06
           doorSprite.loop = true
           doorSprite.play()
-          doorSprite.width = this.cellSize * 2
-          doorSprite.height = this.cellSize * 2
+          doorSprite.width = this.cellSize
+          doorSprite.height = this.cellSize
           doorSprite.x = x * this.cellSize
           doorSprite.y = y * this.cellSize
           doorSprite.zIndex = 6

@@ -5,10 +5,6 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/exceptions/global-exception.filter';
 
-console.log('🔧 Vercel env:', process.env.VERCEL);
-console.log('🌍 NODE_ENV:', process.env.NODE_ENV);
-console.log('🔗 DATABASE_URL (truncada):', process.env.DATABASE_URL?.slice(0, 40) + '...');
-
 export async function createApp() {
   const app = await NestFactory.create(AppModule);
 
@@ -70,7 +66,7 @@ export async function createApp() {
   app.setGlobalPrefix('api');
 
   // 🔹 Middleware de logging para debugging (solo en desarrollo)
-  if (nodeEnv !== 'production') {
+  if (process.env.REQUEST_LOGGING === 'true') {
     app.use((req, res, next) => {
       console.log(`🛰️ [${req.method}] ${req.url}`);
       next();
@@ -105,7 +101,5 @@ if (!process.env.VERCEL) {
   createApp().then(async (app) => {
     const port = process.env.PORT || 3001;
     await app.listen(port);
-    console.log(`🚀 API running on http://localhost:${port}/api`);
-    console.log(`📚 Docs on http://localhost:${port}/api-docs`);
   });
 }

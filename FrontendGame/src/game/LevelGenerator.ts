@@ -125,11 +125,24 @@ export class LevelGenerator {
   }
 
   private computeRequiredEnergy(levelNumber: number): number {
-    const baseRequiredEnergy = Math.min(levelNumber, 3)
-    if (levelNumber >= 6 && levelNumber <= 10) {
-      return 4
+    const specificEnergyByLevel: Record<number, number> = {
+      1: 1,
+      2: 2,
+      3: 3,
+      4: 1,
+      5: 1,
+      6: 2,
+      7: 1,
+      8: 2,
+      9: 1,
+      10: 2,
     }
-    return baseRequiredEnergy
+
+    if (Object.prototype.hasOwnProperty.call(specificEnergyByLevel, levelNumber)) {
+      return specificEnergyByLevel[levelNumber]
+    }
+
+    return Math.min(levelNumber, 3)
   }
 
   private buildPatternPath(template: PatternTemplate): { x: number; y: number }[] {
@@ -270,6 +283,8 @@ export class LevelGenerator {
       this.generateGuidePath(grid, startPosition, normalizedDoorPosition, energyPositions)
     }
 
+    this.ensureStartAccessibility(grid, startPosition)
+
     return { startPosition, doorPosition: normalizedDoorPosition, energyPositions }
   }
 
@@ -330,6 +345,8 @@ export class LevelGenerator {
 
     this.reinforcePatternPath(grid, path, startPosition, doorPosition, energyPositions)
 
+    this.ensureStartAccessibility(grid, startPosition)
+
     return { startPosition, doorPosition, energyPositions }
   }
 
@@ -342,6 +359,10 @@ export class LevelGenerator {
 
     if (levelNumber === 14) {
       return findByName('triangle') ?? this.patternTemplates[0]
+    }
+
+    if (levelNumber === 13) {
+      return findByName('ladder') ?? this.patternTemplates[0]
     }
 
     if (levelNumber >= 11 && levelNumber <= 13) {
@@ -403,51 +424,53 @@ export class LevelGenerator {
   }
 
   private randomDoorEdgePosition(edge: 'top' | 'bottom' | 'left' | 'right'): { x: number; y: number } {
-    const clamp = (value: number) => Math.max(0, Math.min(this.gridSize - 2, value))
+    const clamp = (value: number) => Math.max(0, Math.min(this.gridSize - 1, value))
 
     switch (edge) {
       case 'top':
         return { x: clamp(this.randomCoordinate()), y: 0 }
       case 'bottom':
-        return { x: clamp(this.randomCoordinate()), y: this.gridSize - 2 }
+        return { x: clamp(this.randomCoordinate()), y: this.gridSize - 1 }
       case 'left':
         return { x: 0, y: clamp(this.randomCoordinate()) }
       case 'right':
-        return { x: this.gridSize - 2, y: clamp(this.randomCoordinate()) }
+        return { x: this.gridSize - 1, y: clamp(this.randomCoordinate()) }
       default:
-        return { x: clamp(this.randomCoordinate()), y: this.gridSize - 2 }
+        return { x: clamp(this.randomCoordinate()), y: this.gridSize - 1 }
     }
   }
 
   private markDoorArea(grid: Cell[][], doorPosition: { x: number; y: number }): { x: number; y: number } {
-    const baseX = Math.max(0, Math.min(this.gridSize - 2, doorPosition.x))
-    const baseY = Math.max(0, Math.min(this.gridSize - 2, doorPosition.y))
+    const doorX = Math.max(0, Math.min(this.gridSize - 1, doorPosition.x))
+    const doorY = Math.max(0, Math.min(this.gridSize - 1, doorPosition.y))
 
-    for (let dy = 0; dy <= 1; dy++) {
-      for (let dx = 0; dx <= 1; dx++) {
-        const x = baseX + dx
-        const y = baseY + dy
-        const row = grid[y]
-        if (!row) continue
-
-        const cell = row[x]
-        if (cell) {
-          cell.type = CellType.DOOR
-        }
+    const row = grid[doorY]
+    if (row) {
+      const cell = row[doorX]
+      if (cell) {
+        cell.type = CellType.DOOR
       }
     }
 
-    return { x: baseX, y: baseY }
+    return { x: doorX, y: doorY }
   }
 
   private randomCoordinate(): number {
     return Math.floor(Math.random() * this.gridSize)
   }
 
+  private computeEnergySpawnCount(levelNumber: number, requiredEnergy: number): number {
+    if (levelNumber <= 10) {
+      return requiredEnergy
+    }
+
+    const baseEnergyCount = Math.min(levelNumber, 3)
+    return Math.max(requiredEnergy, baseEnergyCount)
+  }
+
   private generateEnergyPositions(levelNumber: number, requiredEnergy: number): { x: number; y: number }[] {
     const positions: { x: number; y: number }[] = []
-    const baseEnergyCount = Math.min(levelNumber, 3)
-    const energyCount = Math.max(requiredEnergy, baseEnergyCount)
+    const energyCount = this.computeEnergySpawnCount(levelNumber, requiredEnergy)
 
     for (let i = 0; i < energyCount; i++) {
       let x: number, y: number
@@ -557,11 +580,7 @@ export class LevelGenerator {
     const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
     const doorKeys = new Set<string>()
 
-    for (let dy = 0; dy <= 1; dy++) {
-      for (let dx = 0; dx <= 1; dx++) {
-        doorKeys.add(this.positionKey({ x: doorPosition.x + dx, y: doorPosition.y + dy }))
-      }
-    }
+    doorKeys.add(this.positionKey(doorPosition))
 
     const startKey = this.positionKey(startPosition)
 
@@ -578,6 +597,49 @@ export class LevelGenerator {
 
       cell.type = CellType.SAFE
     })
+  }
+
+  private ensureStartAccessibility(
+    grid: Cell[][],
+    startPosition: { x: number; y: number }
+  ): void {
+    const directions = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 },
+    ]
+
+    const isPassable = (cell: Cell | undefined): boolean => {
+      if (!cell) return false
+      return cell.type === CellType.SAFE || cell.type === CellType.ENERGY || cell.type === CellType.DOOR
+    }
+
+    const hasPassableNeighbor = directions.some(dir => {
+      const nx = startPosition.x + dir.x
+      const ny = startPosition.y + dir.y
+      const row = grid[ny]
+      if (!row) return false
+      return isPassable(row[nx])
+    })
+
+    if (hasPassableNeighbor) {
+      return
+    }
+
+    for (const dir of directions) {
+      const nx = startPosition.x + dir.x
+      const ny = startPosition.y + dir.y
+      const row = grid[ny]
+      if (!row) continue
+      const cell = row[nx]
+      if (!cell) continue
+      if (cell.type === CellType.VOID || cell.type === CellType.SNAKE) {
+        cell.type = CellType.SAFE
+        cell.isPath = false
+        break
+      }
+    }
   }
 
   private countHazards(grid: Cell[][]): number {

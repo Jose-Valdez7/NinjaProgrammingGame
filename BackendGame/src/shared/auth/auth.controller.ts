@@ -48,15 +48,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Credenciales inválidas.' })
   @ApiBody({ type: LoginUserDto })
   async login(@Body() loginUserDto: LoginUserDto) {
-    console.log('🎯 AuthController.login llamado');
-    try {
-      const result = await this.authService.login(loginUserDto);
-      console.log('✅ AuthController.login completado exitosamente');
-      return result;
-    } catch (error) {
-      console.error('❌ AuthController.login error:', error);
-      throw error;
-    }
+    return this.authService.login(loginUserDto);
   }
 
   @Post('refresh')

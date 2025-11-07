@@ -1,20 +1,69 @@
 import { Command, LoopCommand } from '../types/game'
 
+type ParseOptions = {
+  requireCommaAfterCommand?: boolean
+}
+
+type ParseState = {
+  requireCommaAfterCommand: boolean
+  commaError: boolean
+  invalidToken: boolean
+  invalidMessage?: string
+}
+
 export class CommandParser {
-  public parseCommands(input: string): (Command | LoopCommand)[] {
+  private lastCommaError = false
+  private lastInvalidToken = false
+  private lastInvalidMessage: string | undefined
+
+  public hasCommaSeparationError(): boolean {
+    return this.lastCommaError
+  }
+
+  public parseCommands(
+    input: string,
+    options: ParseOptions = {},
+    state?: ParseState
+  ): (Command | LoopCommand)[] {
     const commands: (Command | LoopCommand)[] = []
     const cleanInput = input.replace(/\s/g, '').toUpperCase()
-    
+
+    const rootState: ParseState = state ?? {
+      requireCommaAfterCommand: options.requireCommaAfterCommand ?? false,
+      commaError: false,
+      invalidToken: false,
+      invalidMessage: undefined,
+    }
+
+    const requireComma = rootState.requireCommaAfterCommand
+
     let i = 0
     while (i < cleanInput.length) {
+      const currentChar = cleanInput[i]
+
+      if (currentChar === ',') {
+        i++
+        continue
+      }
+
       // Check for loop pattern: (commands)xN
-      if (cleanInput[i] === '(') {
-        const loopResult = this.parseLoop(cleanInput, i)
+      if (currentChar === '(') {
+        const loopResult = this.parseLoop(
+          cleanInput,
+          i,
+          {
+            requireCommaAfterCommand: requireComma,
+          },
+          rootState
+        )
         if (loopResult) {
           commands.push(loopResult.command)
           i = loopResult.nextIndex
+          this.ensureCommaSeparator(cleanInput, rootState, i)
+          continue
         } else {
-          i++
+          rootState.invalidToken = true
+          rootState.invalidMessage = 'Comando incorrecto.'
         }
       } else {
         // Parse single command
@@ -22,12 +71,23 @@ export class CommandParser {
         if (commandResult) {
           commands.push(commandResult.command)
           i = commandResult.nextIndex
+          this.ensureCommaSeparator(cleanInput, rootState, i)
+          continue
         } else {
-          i++
+          rootState.invalidToken = true
+          rootState.invalidMessage = 'Comando incorrecto.'
         }
       }
+
+      i++
     }
-    
+
+    if (!state) {
+      this.lastCommaError = rootState.commaError
+      this.lastInvalidToken = rootState.invalidToken
+      this.lastInvalidMessage = rootState.invalidMessage
+    }
+
     return commands
   }
 
@@ -56,7 +116,12 @@ export class CommandParser {
     }
   }
 
-  private parseLoop(input: string, startIndex: number): { command: LoopCommand; nextIndex: number } | null {
+  private parseLoop(
+    input: string,
+    startIndex: number,
+    options: ParseOptions,
+    state: ParseState
+  ): { command: LoopCommand; nextIndex: number } | null {
     if (input[startIndex] !== '(') return null
     
     // Find matching closing parenthesis
@@ -80,7 +145,7 @@ export class CommandParser {
     
     // Extract commands inside parentheses
     const innerCommands = input.substring(startIndex + 1, endParen)
-    const parsedInnerCommands = this.parseCommands(innerCommands)
+    const parsedInnerCommands = this.parseCommands(innerCommands, options, state)
     
     // Check for 'x' and repetition number
     i = endParen + 1
@@ -116,6 +181,18 @@ export class CommandParser {
     }
   }
 
+  private ensureCommaSeparator(input: string, state: ParseState, nextIndex: number): void {
+    if (!state.requireCommaAfterCommand) return
+    if (nextIndex >= input.length) return
+
+    const nextChar = input[nextIndex]
+    if (nextChar === ',' || nextChar === ')' ) {
+      return
+    }
+
+    state.commaError = true
+  }
+
   public expandCommands(commands: (Command | LoopCommand)[]): Command[] {
     const expanded: Command[] = []
     
@@ -133,11 +210,27 @@ export class CommandParser {
     return expanded
   }
 
-  public validateCommands(input: string): { isValid: boolean; error?: string } {
+  public validateCommands(
+    input: string,
+    options: ParseOptions = {}
+  ): { isValid: boolean; error?: string } {
     try {
-      const commands = this.parseCommands(input)
+      const commands = this.parseCommands(input, options)
+
+      if (this.lastCommaError) {
+        return {
+          isValid: false,
+          error: 'Comandos INCORRECTOS: separa cada instrucción con una coma (,).',
+        }
+      }
+      if (this.lastInvalidToken) {
+        return {
+          isValid: false,
+          error: this.lastInvalidMessage || 'Comandos INCORRECTOS',
+        }
+      }
       if (commands.length === 0) {
-        return { isValid: false, error: 'No hay comandos válidos' }
+        return { isValid: false, error: 'Comandos INCORRECTOS' }
       }
       
       // Check for valid directions and numbers

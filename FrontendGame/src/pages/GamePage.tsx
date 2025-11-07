@@ -338,9 +338,14 @@ export default function GamePage() {
   const prepareCommands = () => {
     const parser = commandParserRef.current
     const trimmed = commands.trim()
-    const validation = parser.validateCommands(trimmed)
-    if (!validation.isValid) throw new Error(validation.error || 'Comandos inválidos')
-    const parsed = parser.parseCommands(trimmed)
+    const requireComma = Boolean(level && level.level >= 4)
+    const validation = parser.validateCommands(trimmed, {
+      requireCommaAfterCommand: requireComma,
+    })
+    if (!validation.isValid) throw new Error(validation.error || 'Comando incorrecto.')
+    const parsed = parser.parseCommands(trimmed, {
+      requireCommaAfterCommand: requireComma,
+    })
     const expanded = parser.expandCommands(parsed)
     const commandCount = level && level.level >= 11 ? parsed.length : 0
 
@@ -601,11 +606,11 @@ export default function GamePage() {
             } else {
               if (currentLevel >= 3) {
                 // Mostrar modal de explicación antes de redirigir a login
-                setTimeout(() => {
+              setTimeout(() => {
                   setShowRegistrationExplanationModal(true)
-                }, 1200)
-                setIsPlaying(false)
-                return
+              }, 1200)
+              setIsPlaying(false)
+              return
               }
               // Permitir avanzar automáticamente si no hay sesión en niveles 1-2
               if (currentLevel < 3) {
@@ -797,13 +802,43 @@ export default function GamePage() {
                   </div>
                 )}
                 {currentLevel === 2 && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <img 
-                      src={doorTileImg} 
-                      alt="Portal" 
-                      className="w-12 h-12 object-contain animate-pulse shadow-lg shadow-purple-500/50 rounded-lg border border-purple-400/30 p-1 bg-black/20"
-                    />
-                    <span className="text-sm text-purple-300 font-semibold">Objetivo: Llega al portal</span>
+                  <div className="flex flex-col items-center gap-3 mt-1 w-full">
+                    <div className="flex items-center gap-2">
+                      <img 
+                        src={doorTileImg} 
+                        alt="Portal" 
+                        className="w-12 h-12 object-contain animate-pulse shadow-lg shadow-purple-500/50 rounded-lg border border-purple-400/30 p-1 bg-black/20"
+                      />
+                      <span className="text-sm text-purple-300 font-semibold">Objetivo: Llega al portal</span>
+                    </div>
+
+                    <div className="relative max-w-lg w-full mx-auto">
+                      <div className="relative bg-gradient-to-br from-amber-900/80 via-yellow-800/70 to-amber-900/80 rounded-2xl border-2 border-amber-500/60 shadow-2xl shadow-amber-500/50 p-6 overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/20 to-transparent rounded-2xl shimmer-effect pointer-events-none"></div>
+
+                        <div className="relative z-10 flex flex-col items-center gap-4">
+                          <div className="flex items-center justify-center gap-3">
+                            <img
+                              src={energyTileImg}
+                              alt="Energía"
+                              className="w-12 h-12 object-contain drop-shadow-[0_0_20px_rgba(252,211,77,0.6)]"
+                            />
+                            <span className="text-4xl animate-bounce">⚡</span>
+                            <h3 className="text-xl font-extrabold text-amber-100 drop-shadow-lg">
+                              <span className="bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent">
+                                ¡IMPORTANTE!
+                              </span>
+                            </h3>
+                          </div>
+                          <div className="bg-black/50 rounded-xl p-4 border border-amber-400/40 w-full">
+                            <p className="text-base text-amber-100 text-center font-semibold leading-relaxed">
+                              Debes recoger <span className="text-amber-200 text-lg font-bold">TODAS LAS ENERGÍAS</span> requeridas<br />
+                              <span className="text-amber-300 text-sm">antes de llegar al portal</span>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -892,44 +927,12 @@ export default function GamePage() {
                         </>
                       )}
                       {currentLevel === 2 && (
-                        <>
-                          <div className="mt-2 p-3 bg-gradient-to-r from-purple-900/40 to-purple-800/40 rounded-xl border border-purple-400/30 max-w-md shadow-lg">
-                            <p className="text-sm text-purple-200 mb-1 flex items-center justify-center gap-2">
-                              <span className="text-lg">💡</span>
-                              <span>La <strong className="text-purple-300">línea guía</strong> te mostrará el camino mientras presionas las flechas</span>
-                            </p>
-                          </div>
-                          <div className="mt-4 relative max-w-lg mx-auto">
-                            {/* Efecto de resplandor de fondo */}
-                            <div className="absolute inset-0 bg-gradient-to-r from-amber-600/30 via-yellow-500/40 to-amber-600/30 rounded-2xl blur-xl animate-pulse"></div>
-                            
-                            {/* Contenedor principal */}
-                            <div className="relative bg-gradient-to-br from-amber-900/80 via-yellow-800/70 to-amber-900/80 rounded-2xl border-2 border-amber-500/60 shadow-2xl shadow-amber-500/50 p-6 transform hover:scale-[1.02] transition-transform duration-300">
-                              {/* Efecto de brillo animado */}
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/20 to-transparent rounded-2xl shimmer-effect"></div>
-                              
-                              <div className="relative z-10">
-                                {/* Título con efecto llamativo */}
-                                <div className="flex items-center justify-center gap-3 mb-4">
-                                  <span className="text-4xl animate-bounce">⚡</span>
-                                  <h3 className="text-xl font-extrabold text-amber-100 drop-shadow-lg">
-                                    <span className="bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent">
-                                      ¡IMPORTANTE!
-                                    </span>
-                                  </h3>
-                                </div>
-                                
-                                {/* Mensaje destacado */}
-                                <div className="bg-black/50 rounded-xl p-4 border border-amber-400/40">
-                                  <p className="text-base text-amber-100 text-center font-semibold leading-relaxed">
-                                    Debes recoger <span className="text-amber-200 text-lg font-bold">TODAS LAS ENERGÍAS</span> requeridas<br />
-                                    <span className="text-amber-300 text-sm">antes de llegar al portal</span>
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </>
+                        <div className="mt-2 p-3 bg-gradient-to-r from-purple-900/40 to-purple-800/40 rounded-xl border border-purple-400/30 max-w-md shadow-lg">
+                          <p className="text-sm text-purple-200 mb-1 flex items-center justify-center gap-2">
+                            <span className="text-lg">💡</span>
+                            <span>La <strong className="text-purple-300">línea guía</strong> te mostrará el camino mientras presionas las flechas</span>
+                          </p>
+                        </div>
                       )}
                     </>
                   )}
@@ -1226,7 +1229,7 @@ export default function GamePage() {
 
                   <button
                     onClick={resetLevel}
-                    className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded flex items-center gap-1 text-sm"
+                    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded flex items-center gap-1 text-sm text-white shadow-md shadow-red-500/30"
                   >
                     <RotateCcw size={16} />
                     Reiniciar
@@ -1326,7 +1329,18 @@ export default function GamePage() {
                 disabled={isPlaying || Boolean(level && level.level <= 3)}
               />
 
-              {error && <div className="mt-2 text-red-400 text-sm">{error}</div>}
+              {error && (
+                <div className="mt-2 text-sm font-semibold text-red-400">
+                  <span className="inline-flex items-center gap-2 bg-gradient-to-r from-red-700/80 via-rose-600/80 to-red-700/80 border border-red-300/70 text-red-50 px-3 py-2 rounded-xl shadow-[0_0_20px_rgba(248,113,113,0.55)]">
+                    <span className="w-5 h-5 flex items-center justify-center rounded-full bg-red-500/70 text-red-100 drop-shadow-sm animate-pulse">
+                      !
+                    </span>
+                    <span className="tracking-wide text-red-50 drop-shadow-[0_0_10px_rgba(254,202,202,0.6)]">
+                      {error}
+                    </span>
+                  </span>
+                </div>
+              )}
 
               <button
                 onClick={executeCommands}
