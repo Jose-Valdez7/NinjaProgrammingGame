@@ -9,6 +9,34 @@ export default async function handler(req: Request, res: Response): Promise<void
   try {
     console.log(`📥 Request recibido: ${req.method} ${req.url}`);
     
+    // Manejar requests OPTIONS (preflight CORS) inmediatamente
+    if (req.method === 'OPTIONS') {
+      console.log(`🔧 Respondiendo a OPTIONS preflight: ${req.url}`);
+      const origin = req.headers.origin;
+      
+      // Permitir cualquier origen de Vercel o localhost
+      const isAllowedOrigin = !origin || 
+        origin.includes('.vercel.app') || 
+        origin.includes('localhost') || 
+        origin.includes('127.0.0.1');
+      
+      if (isAllowedOrigin && origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      }
+      
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Max-Age', '86400'); // 24 horas
+      
+      // Responder inmediatamente y asegurar que se complete
+      res.status(204).end();
+      console.log(`✅ OPTIONS preflight respondido: ${req.url} - Status: 204`);
+      return Promise.resolve();
+    }
+    
     // Inicializar NestJS solo una vez (persistente entre requests)
     if (!cachedApp) {
       console.log('🚀 Inicializando NestJS app...');
