@@ -101,9 +101,14 @@ export class LevelGenerator {
 
   public generateLevel(levelNumber: number): GameLevel {
     const grid = this.createEmptyGrid()
-    const hasGuideLines = levelNumber <= 5
+    const hasGuideLines = levelNumber <= 8 || (levelNumber >= 11 && levelNumber <= 14)
     const allowsLoops = levelNumber >= 11
-    const timeLimit = levelNumber >= 11 ? 60 : levelNumber === 10 ? 75 : undefined
+    let timeLimit: number | undefined
+    if (levelNumber >= 7 && levelNumber <= 8) {
+      timeLimit = 120
+    } else if (levelNumber >= 9 && levelNumber <= 10) {
+      timeLimit = 180
+    }
 
     const requiredEnergy = this.computeRequiredEnergy(levelNumber)
     const { startPosition, doorPosition, energyPositions } =
@@ -371,8 +376,11 @@ export class LevelGenerator {
         return assigned
       }
 
-      if (this.remainingAdvancedPatterns.length === 0) {
+      if (this.remainingAdvancedPatterns.length === 0 || levelNumber === 13) {
         this.remainingAdvancedPatterns = this.patternTemplates.filter(template => {
+          if (levelNumber <= 12) {
+            return template.name !== 'wide-wave' && template.name !== 'triangle' && template.name !== 'ladder'
+          }
           return template.name !== 'wide-wave' && template.name !== 'triangle'
         })
       }

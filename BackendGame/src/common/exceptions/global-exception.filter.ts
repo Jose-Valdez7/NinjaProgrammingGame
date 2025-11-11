@@ -29,7 +29,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest();
 
     // Log del error para debugging
-    console.error(`🚨 GlobalExceptionFilter capturó un error: ${request.method} ${request.url}`, exception);
+    const shouldLogDebug = process.env.ERROR_LOGGING === 'true';
+    if (shouldLogDebug) {
+      console.error(`🚨 GlobalExceptionFilter capturó un error: ${request.method} ${request.url}`, exception);
+    }
 
     let status: HttpStatus;
     let message: string;
@@ -97,14 +100,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       request.url,
     );
 
-    console.log(`📤 Enviando respuesta de error: ${request.method} ${request.url} - Status: ${status}, Message: ${message}`);
-    
     // Asegurar que la respuesta se envíe
     if (!response.headersSent) {
       response.status(status).json(errorBody);
-      console.log(`✅ Respuesta de error enviada: ${request.method} ${request.url}`);
+      if (shouldLogDebug) {
+        console.log(`📤 Enviando respuesta de error: ${request.method} ${request.url} - Status: ${status}, Message: ${message}`);
+        console.log(`✅ Respuesta de error enviada: ${request.method} ${request.url}`);
+      }
     } else {
-      console.warn(`⚠️ Headers ya enviados, no se puede enviar respuesta de error: ${request.method} ${request.url}`);
+      if (shouldLogDebug) {
+        console.warn(`⚠️ Headers ya enviados, no se puede enviar respuesta de error: ${request.method} ${request.url}`);
+      }
     }
   }
 

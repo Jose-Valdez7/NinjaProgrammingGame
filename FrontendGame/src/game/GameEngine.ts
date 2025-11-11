@@ -1,4 +1,4 @@
-import { Application, Assets, Container, Graphics, Text, Texture, AnimatedSprite, Sprite } from 'pixi.js'
+import { Application, Assets, Container, Graphics, Text, TextStyle, Texture, AnimatedSprite, Sprite } from 'pixi.js'
 import { Spine } from '@esotericsoftware/spine-pixi-v8'
 import { gsap } from 'gsap'
 import { GameLevel, CellType, Command } from '../types/game'
@@ -10,18 +10,6 @@ const snakeTextureManifests = snakeFrameSources.map((src, index) => ({
   alias: `snake-frame-${index + 1}`,
   src,
 }))
-
-const createSnakeImages = (): HTMLImageElement[] => {
-  if (typeof window === 'undefined' || typeof Image === 'undefined') {
-    return []
-  }
-
-  return snakeFrameSources.map(src => {
-    const image = new Image()
-    image.src = src
-    return image
-  })
-}
 
 const doorFrameSources = Array.from({ length: 9 }, (_, index) =>
   new URL(`../assets/door/door${index + 1}.png`, import.meta.url).href
@@ -41,18 +29,6 @@ const baseTileTextureManifests = [
   { alias: 'tile-void', src: VOID_TILE_TEXTURE },
   { alias: 'tile-energy', src: ENERGY_TILE_TEXTURE },
 ]
-
-const createDoorImages = (): HTMLImageElement[] => {
-  if (typeof window === 'undefined' || typeof Image === 'undefined') {
-    return []
-  }
-
-  return doorFrameSources.map(src => {
-    const image = new Image()
-    image.src = src
-    return image
-  })
-}
 
 const positionKey = (x: number, y: number): string => `${x},${y}`
 
@@ -89,6 +65,7 @@ const computeDoorCoverage = (
   return { mainKey, overlayKeys }
 }
 
+/*
 // Sistema de sprites avanzado con Canvas HTML5 nativo
 class NativeCanvasRenderer {
   private canvas: HTMLCanvasElement
@@ -783,6 +760,7 @@ class NativeCanvasRenderer {
     this.stopDoorAnimation()
   }
 }
+*/
 
 type GameEngineOptions = {
   width?: number
@@ -792,7 +770,7 @@ type GameEngineOptions = {
 }
 
 export class GameEngine {
-  private app: Application | NativeCanvasRenderer | null = null
+  private app: Application | null = null
   private readonly container: HTMLElement
   private canvasElement: HTMLCanvasElement
   private gameContainer: Container | null = null
@@ -805,6 +783,7 @@ export class GameEngine {
   private readonly gridSize: number
   private ninjaEnergized = false
   private ready = false
+  private rendererReadyPromise: Promise<void> | null = null
   private currentLevelData: GameLevel | null = null
   private guideOverlay: Graphics | null = null
   private guideVisible = false
@@ -817,6 +796,14 @@ export class GameEngine {
   private energyTexture: Texture | null = null
   private baseTileTexturesPromise: Promise<void> | null = null
   private doorCoverage: DoorCoverage = { mainKey: null, overlayKeys: new Set() }
+  private uiLayer: Container | null = null
+  private notificationContainer: Container | null = null
+  private notificationTimeline: gsap.core.Timeline | null = null
+  private nextLevelHandler: (() => void) | null = null
+  private restartLevelHandler: (() => void) | null = null
+  private victoryBadgeTexture: Texture | null = null
+  private defeatBadgeTexture: Texture | null = null
+  private badgeTexturesPromise: Promise<void> | null = null
 
   constructor(container: HTMLElement, options?: GameEngineOptions) {
     this.container = container
@@ -839,7 +826,10 @@ export class GameEngine {
     this.container.innerHTML = ''
     this.container.appendChild(this.canvasElement)
 
-    void this.initializeRenderer(gameWidth, gameHeight)
+    this.rendererReadyPromise = this.initializeRenderer(gameWidth, gameHeight).catch(error => {
+      console.error('Error inicializando PixiJS:', error)
+      throw error
+    })
   }
 
   private async initializeRenderer(width: number, height: number): Promise<void> {
@@ -859,9 +849,8 @@ export class GameEngine {
       this.initializePixiScene()
       this.ready = true
     } catch (error) {
-      console.warn('No fue posible inicializar PixiJS, usando renderer nativo.', error)
-      this.switchToNativeRenderer()
-      this.ready = true
+      this.ready = false
+      throw error
     }
   }
 
@@ -869,54 +858,33 @@ export class GameEngine {
     return this.app instanceof Application ? this.app : null
   }
 
-  private get nativeRenderer(): NativeCanvasRenderer | null {
-    return this.app instanceof NativeCanvasRenderer ? this.app : null
-  }
-
   private initializePixiScene(): void {
     const app = this.pixiApp
     if (!app) return
 
     const gameContainer = new Container()
+    gameContainer.sortableChildren = true
     const gridContainer = new Container()
     gridContainer.sortableChildren = true
     const ninjaSprite = this.createAdvancedNinjaSprite()
+    const uiLayer = new Container()
+    uiLayer.sortableChildren = true
+    uiLayer.zIndex = 1000
+    uiLayer.eventMode = 'none'
 
     app.stage.addChild(gameContainer)
     gameContainer.addChild(gridContainer)
     gameContainer.addChild(ninjaSprite)
+    gameContainer.addChild(uiLayer)
 
     this.gameContainer = gameContainer
     this.gridContainer = gridContainer
     this.ninjaSprite = ninjaSprite
+    this.uiLayer = uiLayer
 
     void this.ensureSpineNinja()
     // Cargar texturas de celdas
     void this.loadTextures()
-  }
-
-  private switchToNativeRenderer(): void {
-    const fallbackCanvas = document.createElement('canvas')
-    const canvasSize = this.gridSize * this.cellSize
-    fallbackCanvas.width = canvasSize
-    fallbackCanvas.height = canvasSize
-    fallbackCanvas.style.width = `${canvasSize * 1.5}px`
-    fallbackCanvas.style.height = `${canvasSize * 1.5}px`
-    fallbackCanvas.style.imageRendering = 'pixelated'
-    fallbackCanvas.className = this.canvasElement.className
-
-    // Verificar si el canvas actual está en el DOM antes de reemplazarlo
-    if (this.canvasElement.parentNode === this.container) {
-      this.container.replaceChild(fallbackCanvas, this.canvasElement)
-    } else {
-      // Si el canvas no está en el DOM, limpiar el container y agregar el nuevo canvas
-      this.container.innerHTML = ''
-      this.container.appendChild(fallbackCanvas)
-    }
-    
-    this.canvasElement = fallbackCanvas
-
-    this.app = new NativeCanvasRenderer(this.canvasElement, this.gridSize, this.cellSize)
   }
 
   private async ensureSpineNinja(): Promise<void> {
@@ -1156,24 +1124,65 @@ export class GameEngine {
     void this.ensureSnakeTextures()
     void this.ensureDoorTextures()
     void this.ensureBaseTileTextures()
+    void this.ensureBadgeTextures()
+  }
+  private ensureBadgeTextures(): Promise<void> {
+    if (this.victoryBadgeTexture && this.defeatBadgeTexture) {
+      return Promise.resolve()
+    }
+
+    if (this.badgeTexturesPromise) {
+      return this.badgeTexturesPromise
+    }
+
+    const victoryUrl = new URL('../assets/images/icons/Ninja-win.png', import.meta.url).href
+    const defeatUrl = new URL('../assets/images/icons/Ninja-lose.png', import.meta.url).href
+
+    this.badgeTexturesPromise = (async () => {
+      try {
+        const [victoryTexture, defeatTexture] = await Promise.all([
+          Assets.load<Texture>(victoryUrl),
+          Assets.load<Texture>(defeatUrl),
+        ])
+
+        this.victoryBadgeTexture = victoryTexture ?? Texture.from(victoryUrl)
+        this.defeatBadgeTexture = defeatTexture ?? Texture.from(defeatUrl)
+      } catch (error) {
+        console.warn('No se pudieron cargar las texturas de badges de victoria/derrota:', error)
+        this.victoryBadgeTexture = Texture.WHITE
+        this.defeatBadgeTexture = Texture.WHITE
+      } finally {
+        this.badgeTexturesPromise = null
+      }
+    })()
+
+    return this.badgeTexturesPromise
+  }
+
+  public setFlowHandlers(handlers: { onNextLevel?: () => void; onRestart?: () => void }): void {
+    if (handlers.onNextLevel) {
+      this.nextLevelHandler = handlers.onNextLevel
+    }
+    if (handlers.onRestart) {
+      this.restartLevelHandler = handlers.onRestart
+    }
   }
 
   public async loadLevel(level: GameLevel): Promise<void> {
-    // Esperar a que el renderer esté listo
-    while (!this.ready) {
-      await new Promise(resolve => setTimeout(resolve, 10))
+    if (!this.rendererReadyPromise) {
+      throw new Error('Renderer no inicializado')
     }
 
-    const native = this.nativeRenderer
-    if (native) {
-      native.loadLevel(level)
-      this.ninjaEnergized = false
-      return
+    await this.rendererReadyPromise
+
+    if (!this.ready) {
+      throw new Error('No se pudo inicializar el renderer de PixiJS.')
     }
 
     void this.ensureSpineNinja()
     await this.ensureSnakeTextures()
     await this.ensureDoorTextures()
+    await this.ensureBadgeTextures()
     await this.ensureBaseTileTextures()
     this.doorCoverage = computeDoorCoverage(level)
 
@@ -1181,6 +1190,8 @@ export class GameEngine {
       console.error('Renderer no disponible al cargar nivel')
       return
     }
+
+    this.clearNotification()
 
     const gridContainer = this.gridContainer
     if (!gridContainer) {
@@ -1457,6 +1468,7 @@ export class GameEngine {
   private buildPathFromCommands(level: GameLevel, commands: Command[]): { x: number; y: number }[] {
     const path: { x: number; y: number }[] = []
     const current = { ...level.startPosition }
+    const allowHazardPreview = level.level <= 3
 
     path.push({ ...current })
 
@@ -1469,7 +1481,14 @@ export class GameEngine {
           case 'B': current.y += 1; break
         }
 
-        if (!this.isWalkable(level, current.x, current.y)) {
+        if (!this.isWithinGrid(current.x, current.y)) {
+          return path
+        }
+
+        const cell = level.grid[current.y]?.[current.x]
+        const isHazard = cell?.type === CellType.VOID || cell?.type === CellType.SNAKE
+
+        if (isHazard && !allowHazardPreview) {
           return path
         }
 
@@ -1480,15 +1499,149 @@ export class GameEngine {
     return path
   }
 
-  private isWalkable(level: GameLevel, x: number, y: number): boolean {
-    if (x < 0 || y < 0 || x >= this.gridSize || y >= this.gridSize) {
-      return false
+  private isWithinGrid(x: number, y: number): boolean {
+    return x >= 0 && y >= 0 && x < this.gridSize && y < this.gridSize
+  }
+
+  private clearNotification(): void {
+    if (this.notificationTimeline) {
+      this.notificationTimeline.kill()
+      this.notificationTimeline = null
     }
 
-    const cell = level.grid[y][x]
-    if (!cell) return false
+    if (this.notificationContainer && this.notificationContainer.parent) {
+      this.notificationContainer.parent.removeChild(this.notificationContainer)
+    }
+    this.notificationContainer = null
+  }
 
-    return cell.type !== CellType.VOID && cell.type !== CellType.SNAKE
+  public showNotification(
+    message: string,
+    color: number = 0xffffff,
+    outcome: 'victory' | 'defeat' = 'victory'
+  ): void {
+    const action = outcome === 'victory' ? () => this.loadNextLevel() : () => this.restartLevel()
+
+    const app = this.pixiApp
+    const uiLayer = this.uiLayer
+
+    if (!app || !uiLayer) {
+      window.setTimeout(action, 2000)
+      return
+    }
+
+    this.clearNotification()
+
+    const overlay = new Container()
+    overlay.alpha = 0
+    overlay.scale.set(0.5)
+    overlay.zIndex = 1000
+    overlay.eventMode = 'none'
+
+    const textStyle = new TextStyle({
+      fontFamily: 'Orbitron, "Segoe UI", sans-serif',
+      fontSize: Math.max(28, this.cellSize * 0.9),
+      fill: color,
+      align: 'center',
+      fontWeight: '700',
+    })
+
+    const lines = message.split('\n')
+    const lineSpacing = this.cellSize * 0.25
+    const texts: Text[] = []
+    let maxWidth = 0
+    let totalHeight = -lineSpacing
+
+    for (const line of lines) {
+      const text = new Text(line, textStyle)
+      text.anchor.set(0.5)
+      texts.push(text)
+      maxWidth = Math.max(maxWidth, text.width)
+      totalHeight += text.height + lineSpacing
+    }
+
+    const badgeTexture =
+      outcome === 'victory' ? this.victoryBadgeTexture ?? Texture.WHITE : this.defeatBadgeTexture ?? Texture.WHITE
+
+    const badge = new Sprite(badgeTexture)
+    const baseBadgeSize = this.cellSize * 2.5
+    badge.width = baseBadgeSize
+    badge.height = baseBadgeSize
+    badge.anchor.set(0.5)
+    badge.y = -totalHeight / 2 - badge.height / 2 + this.cellSize * 0.15
+
+    const paddingX = this.cellSize * 2.8
+    const paddingY = this.cellSize * 1.8
+    const bgWidth = Math.max(maxWidth, badge.width) + paddingX
+    const bgHeight = totalHeight + paddingY + badge.height
+
+    const background = new Graphics()
+    background
+      .roundRect(-bgWidth / 2, -bgHeight / 2, bgWidth, bgHeight, 36)
+      .fill({ color: 0x0b1120, alpha: 0.8 })
+      .stroke({ color, width: 4, alpha: 0.85 })
+
+    const textGroup = new Container()
+    let currentY = -totalHeight / 2
+    texts.forEach(text => {
+      text.y = currentY + text.height / 2
+      textGroup.addChild(text)
+      currentY += text.height + lineSpacing
+    })
+
+    const spacing = this.cellSize * 0.05
+    textGroup.y = badge.y + badge.height / 2 + totalHeight / 2 + spacing
+
+    overlay.addChild(background)
+    overlay.addChild(badge)
+    overlay.addChild(textGroup)
+
+    const stageWidth = this.gridSize * this.cellSize
+    const stageHeight = this.gridSize * this.cellSize
+    overlay.position.set(stageWidth / 2, stageHeight / 2)
+
+    uiLayer.addChild(overlay)
+    this.notificationContainer = overlay
+
+    const timeline = gsap.timeline({
+      onComplete: () => {
+        this.clearNotification()
+        action()
+      },
+    })
+
+    timeline.to(overlay, {
+      alpha: 1,
+      scale: 1.1,
+      duration: 0.4,
+      ease: 'back.out(2)',
+    })
+
+    timeline.to(overlay, {
+      alpha: 0,
+      scale: 1.5,
+      duration: 0.6,
+      ease: 'power2.in',
+      delay: 1.5,
+    })
+
+    this.notificationTimeline = timeline
+  }
+
+  private loadNextLevel(): void {
+    if (this.nextLevelHandler) {
+      this.nextLevelHandler()
+    } else {
+      console.warn('[GameEngine] No hay handler configurado para avanzar de nivel.')
+    }
+  }
+
+  private restartLevel(): void {
+    if (this.restartLevelHandler) {
+      this.restartLevelHandler()
+    } else {
+      console.warn('[GameEngine] No hay handler configurado para reiniciar el nivel.')
+    }
   }
 
   public setGuideVisibility(visible: boolean): void {
@@ -1499,12 +1652,6 @@ export class GameEngine {
   }
 
   public setNinjaPosition(x: number, y: number): void {
-    const native = this.nativeRenderer
-    if (native) {
-      native.setNinjaPosition(x, y)
-      return
-    }
-
     const ninjaSprite = this.ninjaSprite
     if (ninjaSprite) {
       ninjaSprite.x = x * this.cellSize + this.cellSize / 2
@@ -1536,13 +1683,6 @@ export class GameEngine {
 
 
   public animateEnergyCollection(): void {
-    const native = this.nativeRenderer
-    if (native) {
-      native.animateEnergyCollection()
-      this.ninjaEnergized = true
-      return
-    }
-
     void this.ensureSpineNinja()
     this.ninjaEnergized = true
     this.playNinjaAnimation('hoverboard', true, true)
@@ -1597,11 +1737,6 @@ export class GameEngine {
   }
 
   public animateFailure(type: 'void' | 'snake'): Promise<void> {
-    const native = this.nativeRenderer
-    if (native) {
-      return native.animateFailure(type)
-    }
-
     void this.ensureSpineNinja()
     this.ninjaEnergized = false
 
@@ -1703,11 +1838,6 @@ export class GameEngine {
   }
 
   public animateVictory(): Promise<void> {
-    const native = this.nativeRenderer
-    if (native) {
-      return native.animateVictory()
-    }
-
     void this.ensureSpineNinja()
     this.playNinjaAnimation('jump', false, true)
 
@@ -1766,16 +1896,6 @@ export class GameEngine {
   }
 
   public debugDump(): Record<string, unknown> | null {
-    const native = this.nativeRenderer
-    if (native) {
-      return {
-        rendererType: 'Native Canvas',
-        isNativeRenderer: true,
-        cellSize: this.cellSize,
-        gridSize: this.gridSize,
-      }
-    }
-
     const app = this.pixiApp
     if (!app) {
       return null
@@ -1796,11 +1916,7 @@ export class GameEngine {
   }
 
   public destroy(): void {
-    const native = this.nativeRenderer
-    if (native) {
-      native.destroy()
-      return
-    }
+    this.clearNotification()
 
     const app = this.pixiApp
     if (app) {
@@ -1808,19 +1924,17 @@ export class GameEngine {
     }
 
     this.app = null
+    this.ready = false
+    this.rendererReadyPromise = null
     this.gameContainer = null
     this.gridContainer = null
     this.ninjaSprite = null
     this.ninjaSpine = null
     this.spineLoadPromise = null
+    this.uiLayer = null
   }
 
   private updateNinjaAnimationState(): void {
-    const native = this.nativeRenderer
-    if (native) {
-      return
-    }
-
     const animation = this.ninjaEnergized ? 'hoverboard' : 'idle'
     this.playNinjaAnimation(animation, true, true)
   }
@@ -1829,7 +1943,6 @@ export class GameEngine {
   public async refreshGridPreservePosition(): Promise<void> {
     const app = this.pixiApp
     if (!app) {
-      // En renderer nativo el render es inmediato, no hacemos nada
       return
     }
 

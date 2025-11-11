@@ -20,7 +20,6 @@ import arrowLeft from '@/assets/images/icons/izquierda.png'
 import arrowRight from '@/assets/images/icons/derecha.png'
 import ninjaIcon from '@/assets/images/icons/Ninja.png'
 
-const safeTileImg = new URL('../assets/images/backgrounds/secure1.png', import.meta.url).href
 const energyTileImg = new URL('../assets/energy/energy1.png', import.meta.url).href
 const voidTileImg = new URL('../assets/void/void1.png', import.meta.url).href
 const snakeTileImg = new URL('../assets/snake/Snake1.png', import.meta.url).href
@@ -33,6 +32,7 @@ export default function GamePage() {
   const levelGeneratorRef = useRef(new LevelGenerator())
   const commandParserRef = useRef(new CommandParser())
   const timerRef = useRef<number | null>(null)
+  const timeLimitRef = useRef<number | null>(null)
   const timeLimitExceededRef = useRef(false)
   const energyVideoResolveRef = useRef<(() => void) | null>(null)
   const hasShownEnergyCutsceneRef = useRef(false)
@@ -44,6 +44,8 @@ export default function GamePage() {
   const [currentLevel, setCurrentLevel] = useState(1)
   const [level, setLevel] = useState<GameLevel | null>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
+  const [remainingTime, setRemainingTime] = useState<number | null>(null)
+  const [timerMode, setTimerMode] = useState<'none' | 'countdown' | 'countup'>('none')
   const [movesCount, setMovesCount] = useState(0)
   const [showSnakeGameOver, setShowSnakeGameOver] = useState(false)
   const [showVoidGameOver, setShowVoidGameOver] = useState(false)
@@ -58,6 +60,7 @@ export default function GamePage() {
   const [showEnergyCutscene, setShowEnergyCutscene] = useState(false)
   const [showFinalCelebration, setShowFinalCelebration] = useState(false)
   const [showRegistrationExplanationModal, setShowRegistrationExplanationModal] = useState(false)
+  const [pendingLevelAfterCelebration, setPendingLevelAfterCelebration] = useState<number | null>(null)
  
   // 🔊 Música de fondo
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -94,8 +97,31 @@ export default function GamePage() {
 
   const startTimer = useCallback(() => {
     stopTimer()
+    timeLimitExceededRef.current = false
+    setRemainingTime(null)
     setElapsedTime(0)
     timerRef.current = window.setInterval(() => {
+      setElapsedTime(prev => prev + 1)
+    }, 1000)
+  }, [stopTimer])
+
+  const startCountdown = useCallback((seconds: number) => {
+    stopTimer()
+    timeLimitExceededRef.current = false
+    setElapsedTime(0)
+    setRemainingTime(seconds)
+    timerRef.current = window.setInterval(() => {
+      setRemainingTime(prev => {
+        if (prev === null) return prev
+        if (prev <= 1) {
+          if (timerRef.current !== null) {
+            window.clearInterval(timerRef.current)
+            timerRef.current = null
+          }
+          return 0
+        }
+        return prev - 1
+      })
       setElapsedTime(prev => prev + 1)
     }, 1000)
   }, [stopTimer])
@@ -230,17 +256,38 @@ export default function GamePage() {
       void audioRef.current.play().catch(() => {})
     }
 
-    if (levelNumber >= 6) {
+    let nextTimerMode: 'none' | 'countdown' | 'countup' = 'none'
+    let countdownLimit: number | null = null
+
+    if (levelNumber >= 7 && levelNumber <= 8) {
+      nextTimerMode = 'countdown'
+      countdownLimit = 120
+    } else if (levelNumber >= 9 && levelNumber <= 10) {
+      nextTimerMode = 'countdown'
+      countdownLimit = 180
+    } else if (levelNumber >= 11) {
+      nextTimerMode = 'countup'
+    }
+
+    setTimerMode(nextTimerMode)
+    timeLimitRef.current = countdownLimit
+    timeLimitExceededRef.current = false
+
+    if (nextTimerMode === 'countdown' && countdownLimit) {
+      startCountdown(countdownLimit)
+    } else if (nextTimerMode === 'countup') {
       startTimer()
+      setRemainingTime(null)
     } else {
       stopTimer()
       setElapsedTime(0)
+      setRemainingTime(null)
     }
 
     // Mostrar modales introductorios según nivel
     if (levelNumber === 1) {
       setIntroTitle('Nivel 1')
-      setIntroMessage('Usa las flechas del teclado para mover al ninja.')
+      setIntroMessage('Usa las flechas del panel de comandos para mover al ninja.')
       setShowIntroModal(true)
     } else if (levelNumber === 2) {
       setIntroTitle('Nivel 2')
@@ -250,9 +297,9 @@ export default function GamePage() {
       setIntroTitle('Nivel 4')
       setIntroMessage('A partir de aquí debes mover al ninja usando comandos en lugar de flechas.')
       setShowIntroModal(true)
-    } else if (levelNumber === 6) {
-      setIntroTitle('Nivel 6')
-      setIntroMessage('¡Aumenta la dificultad! A partir de aquí las líneas guía desaparecen y se activa el reloj.')
+    } else if (levelNumber === 7) {
+      setIntroTitle('Nivel 7')
+      setIntroMessage('¡Aumenta la dificultad! A partir de aquí se activa el reloj y las líneas guía desaparecen.')
       setShowIntroModal(true)
     } else if (levelNumber === 11) {
       setIntroTitle('Nivel 11: ¡Bucles!')
@@ -261,10 +308,65 @@ export default function GamePage() {
     } else {
       setShowIntroModal(false)
     }
-  }, [commands, dispatch, startTimer, stopTimer])
+  }, [commands, dispatch, startCountdown, startTimer, stopTimer])
+
+  useEffect(() => {
+    const engine = gameEngineRef.current
+    if (!engine) return
+
+    engine.setFlowHandlers({
+      onNextLevel: () => {
+        setIsPlaying(false)
+
+        if (!currentUser && currentLevel >= 3) {
+          setShowRegistrationExplanationModal(true)
+          return
+        }
+
+        if (currentLevel >= 14) {
+          if (currentLevel === 14) {
+            setPendingLevelAfterCelebration(currentLevel + 1)
+          } else {
+            setPendingLevelAfterCelebration(null)
+          }
+          setShowFinalCelebration(true)
+          return
+        }
+
+        void loadLevel(currentLevel + 1)
+      },
+      onRestart: () => {
+        setIsPlaying(false)
+        void loadLevel(currentLevel)
+      },
+    })
+  }, [currentLevel, currentUser, loadLevel])
 
   // 🔁 Reiniciar nivel
   const resetLevel = useCallback(() => loadLevel(currentLevel), [currentLevel, loadLevel])
+
+  const handleArrowInput = useCallback((dir: 'D' | 'I' | 'S' | 'B') => {
+    if (isPlaying) return
+
+    if (audioRef.current && audioRef.current.paused) {
+      void audioRef.current.play().catch(() => {})
+    }
+
+    setCommands(prev => {
+      const trimmed = prev.trim()
+      if (!trimmed) return `${dir}1`
+
+      const parts = trimmed.split(',')
+      const last = parts[parts.length - 1]
+      const match = /^([DISB])(\d+)$/.exec(last)
+      if (match && match[1] === dir) {
+        const nextCount = String(Number(match[2]) + 1)
+        parts[parts.length - 1] = `${dir}${nextCount}`
+        return parts.join(',')
+      }
+      return `${trimmed.replace(/\s+/g, '')},${dir}1`
+    })
+  }, [isPlaying])
 
   // ⌨️ Registro de comandos con flechas (niveles 1-3)
   useEffect(() => {
@@ -272,7 +374,6 @@ export default function GamePage() {
     if (!shouldUseArrows) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isPlaying) return
       const map: Record<string, 'D' | 'I' | 'S' | 'B'> = {
         ArrowRight: 'D',
         ArrowLeft: 'I',
@@ -282,57 +383,35 @@ export default function GamePage() {
       const dir = map[e.key]
       if (!dir) return
       e.preventDefault()
-      // Asegurar BGM corriendo tras interacción
-      if (audioRef.current && audioRef.current.paused) {
-        void audioRef.current.play().catch(() => {})
-      }
-
-      setCommands(prev => {
-        const trimmed = prev.trim()
-        if (!trimmed) return `${dir}1`
-
-        const parts = trimmed.split(',')
-        const last = parts[parts.length - 1]
-        const match = /^([DISB])(\d+)$/.exec(last)
-        if (match && match[1] === dir) {
-          const nextCount = String(Number(match[2]) + 1)
-          parts[parts.length - 1] = `${dir}${nextCount}`
-          return parts.join(',')
-        }
-        return `${trimmed.replace(/\s+/g, '')},${dir}1`
-      })
+      handleArrowInput(dir)
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [level, isPlaying])
+  }, [level, handleArrowInput])
 
   useEffect(() => {
-    if (!level || level.level < 11) {
+    if (timerMode !== 'countdown') {
       timeLimitExceededRef.current = false
       return
     }
 
-    const limit = level.timeLimit
-    if (!limit) {
-      timeLimitExceededRef.current = false
-      return
-    }
+    if (remainingTime === null) return
+    if (remainingTime > 0) return
+    if (timeLimitExceededRef.current) return
 
-    if (elapsedTime >= limit && !timeLimitExceededRef.current) {
       const handleTimeout = async () => {
         timeLimitExceededRef.current = true
         stopTimer()
         setIsPlaying(false)
-        await resetLevel()
         setError('Tiempo límite sobrepasado. ¡Vuelve a intentarlo!')
+      await resetLevel()
       }
 
       void handleTimeout()
-    }
-  }, [elapsedTime, level, resetLevel, stopTimer])
+  }, [remainingTime, timerMode, resetLevel, stopTimer])
 
   // 🧩 Validar y preparar comandos
   const prepareCommands = () => {
@@ -489,31 +568,33 @@ export default function GamePage() {
 
           if (cell.type === 'void') {
             await gameEngineRef.current.animateFailure('void')
+            stopTimer()
             setError('¡Caíste al vacío! Intenta de nuevo.')
             setIsPlaying(false)
             await postProgress({
               success: false,
               commandsUsed: commandCount,
               energized: isEnergized,
-              timeTaken: elapsedTime,
+              timeTaken: getTimeTaken(),
               failureType: 'void',
             })
-            setShowVoidGameOver(true)
+            gameEngineRef.current?.showNotification('GAME OVER', 0xff4444, 'defeat')
             return
           }
 
           if (cell.type === 'snake') {
             await gameEngineRef.current.animateFailure('snake')
+            stopTimer()
             setError('¡Te mordió una serpiente! Intenta de nuevo.')
             setIsPlaying(false)
             await postProgress({
               success: false,
               commandsUsed: commandCount,
               energized: isEnergized,
-              timeTaken: elapsedTime,
+              timeTaken: getTimeTaken(),
               failureType: 'snake',
             })
-            setShowSnakeGameOver(true)
+            gameEngineRef.current?.showNotification('GAME OVER', 0xff4444, 'defeat')
             return
           }
 
@@ -543,7 +624,7 @@ export default function GamePage() {
                     success: true,
                     commandsUsed: 0,
                     energized: true,
-                    timeTaken: elapsedTime,
+                    timeTaken: getTimeTaken(),
                   })
 
                   if (response?.ok) {
@@ -552,13 +633,16 @@ export default function GamePage() {
                       return [...prev, 1].sort((a, b) => a - b)
                     })
                     setMaxLevelCompleted(prev => Math.max(prev, 1))
+                  } else {
+                    addOfflineProgress({
+                      level: 1,
+                      timeTaken: getTimeTaken(),
+                      moves: movesCount,
+                    })
                   }
                 }
 
-                if (currentLevel < 15) {
-                  setTimeout(() => loadLevel(2), 1200)
-                }
-
+                gameEngineRef.current?.showNotification('Felicitaciones\nNivel superado', 0x00ff99, 'victory')
                 setIsPlaying(false)
                 return
               }
@@ -578,12 +662,21 @@ export default function GamePage() {
               return
             }
 
+            const requiresSingleCommand = currentLevel >= 11 && currentLevel <= 15
+            if (requiresSingleCommand && commandCount !== 1) {
+              stopTimer()
+              setError('Hazlo en un solo comando para superar este nivel.')
+              setIsPlaying(false)
+              gameEngineRef.current?.showNotification('Hazlo solo \n 1 comando', 0xff4444, 'defeat')
+              return
+            }
+
             stopTimer()
             await gameEngineRef.current.animateVictory()
             setError('')
 
             if (currentLevel <= 3) {
-              addOfflineProgress({ level: currentLevel, timeTaken: elapsedTime, moves: movesCount })
+              addOfflineProgress({ level: currentLevel, timeTaken: getTimeTaken(), moves: movesCount })
             }
 
             if (currentUser) {
@@ -591,7 +684,7 @@ export default function GamePage() {
                 success: true,
                 commandsUsed: commandCount,
                 energized: isEnergized,
-                timeTaken: elapsedTime,
+                timeTaken: getTimeTaken(),
               })
 
               if (response?.ok) {
@@ -603,29 +696,9 @@ export default function GamePage() {
               } else if (response) {
                 console.warn('No se pudo registrar el avance del usuario')
               }
-            } else {
-              if (currentLevel >= 3) {
-                // Mostrar modal de explicación antes de redirigir a login
-              setTimeout(() => {
-                  setShowRegistrationExplanationModal(true)
-              }, 1200)
-              setIsPlaying(false)
-              return
-              }
-              // Permitir avanzar automáticamente si no hay sesión en niveles 1-2
-              if (currentLevel < 3) {
-                setTimeout(() => loadLevel(currentLevel + 1), 2000)
-                setIsPlaying(false)
-                return
-              }
             }
 
-            if (currentLevel < 15) {
-              setTimeout(() => loadLevel(currentLevel + 1), 2000)
-            } else {
-              setShowFinalCelebration(true)
-            }
-
+            gameEngineRef.current?.showNotification('Felicitaciones\nNivel superado', 0x00ff99, 'victory')
             setIsPlaying(false)
             return
           }
@@ -643,17 +716,50 @@ export default function GamePage() {
     }
   }
 
+  const showTimer = timerMode !== 'none'
+  const currentTimerValue = timerMode === 'countdown'
+    ? Math.max(0, remainingTime ?? (timeLimitRef.current ?? 0))
+    : elapsedTime
+
+  const getTimeTaken = () => {
+    if (timerMode === 'countdown') {
+      const limit = timeLimitRef.current ?? 0
+      const remaining = remainingTime ?? limit
+      return Math.max(0, limit - remaining)
+    }
+    return elapsedTime
+  }
+
   const levelInfo = level ? {
     energyRequired: energyRemaining,
     totalEnergy: level.requiredEnergy,
-    timeLimit: level.timeLimit,
+    timeLimit: timerMode === 'countdown' ? (timeLimitRef.current ?? level.timeLimit ?? null) : null,
     hasGuideLines: level.hasGuideLines,
     allowsLoops: level.allowsLoops
   } : {}
 
   const isAdvancedLoopLevel = Boolean(level && level.level >= 11)
 
-  const showTimer = Boolean(level && level.level >= 6)
+  const introModalContainerClass =
+    level && (level.level === 4 || level.level === 11)
+      ? 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-red-500/60 bg-gradient-to-br from-[#5a0412] via-[#a6101f] to-[#ff5722] shadow-[0_0_65px_rgba(248,113,113,0.6)] flex flex-col'
+      : level && level.level === 6
+        ? 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-blue-500/60 bg-gradient-to-br from-[#051235] via-[#0c2ed1] to-[#21d4fd] shadow-[0_0_65px_rgba(59,130,246,0.55)] flex flex-col'
+      : 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)] flex flex-col'
+
+  const introModalGlowTopClass =
+    level && (level.level === 4 || level.level === 11)
+      ? 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-red-500/80 blur-2xl animate-pulse'
+      : level && level.level === 6
+        ? 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-blue-400/80 blur-2xl animate-pulse'
+      : 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse'
+
+  const introModalGlowBottomClass =
+    level && (level.level === 4 || level.level === 11)
+      ? 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-orange-500/80 blur-2xl animate-pulse delay-300'
+      : level && level.level === 6
+        ? 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-cyan-400/80 blur-2xl animate-pulse delay-300'
+      : 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-purple-500/40 blur-3xl animate-pulse delay-300'
 
   return (
     <div className="min-h-screen bg-ninja-dark text-white">
@@ -770,10 +876,10 @@ export default function GamePage() {
             }
           `}</style>
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur p-4">
-            <div className="relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)] flex flex-col">
+            <div className={introModalContainerClass}>
               <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse" />
-                <div className="absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-purple-500/40 blur-3xl animate-pulse delay-300" />
+                <div className={introModalGlowTopClass} />
+                <div className={introModalGlowBottomClass} />
               </div>
 
               <div 
@@ -813,8 +919,8 @@ export default function GamePage() {
                     </div>
 
                     <div className="relative max-w-lg w-full mx-auto">
-                      <div className="relative bg-gradient-to-br from-amber-900/80 via-yellow-800/70 to-amber-900/80 rounded-2xl border-2 border-amber-500/60 shadow-2xl shadow-amber-500/50 p-6 overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/20 to-transparent rounded-2xl shimmer-effect pointer-events-none"></div>
+                      <div className="relative bg-gradient-to-br from-red-900/80 via-orange-900/75 to-red-800/80 rounded-2xl border-2 border-red-500/70 shadow-2xl shadow-red-500/40 p-6 overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-red-500/25 to-transparent rounded-2xl shimmer-effect pointer-events-none"></div>
 
                         <div className="relative z-10 flex flex-col items-center gap-4">
                           <div className="flex items-center justify-center gap-3">
@@ -823,17 +929,17 @@ export default function GamePage() {
                               alt="Energía"
                               className="w-12 h-12 object-contain drop-shadow-[0_0_20px_rgba(252,211,77,0.6)]"
                             />
-                            <span className="text-4xl animate-bounce">⚡</span>
-                            <h3 className="text-xl font-extrabold text-amber-100 drop-shadow-lg">
-                              <span className="bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent">
+                            <span className="text-4xl animate-bounce text-red-200">⚡</span>
+                            <h3 className="text-xl font-extrabold text-red-100 drop-shadow-lg">
+                              <span className="bg-gradient-to-r from-red-200 to-orange-200 bg-clip-text text-transparent">
                                 ¡IMPORTANTE!
                               </span>
                             </h3>
                           </div>
-                          <div className="bg-black/50 rounded-xl p-4 border border-amber-400/40 w-full">
-                            <p className="text-base text-amber-100 text-center font-semibold leading-relaxed">
-                              Debes recoger <span className="text-amber-200 text-lg font-bold">TODAS LAS ENERGÍAS</span> requeridas<br />
-                              <span className="text-amber-300 text-sm">antes de llegar al portal</span>
+                          <div className="bg-black/60 rounded-xl p-4 border border-red-500/60 w-full">
+                            <p className="text-base text-red-100 text-center font-semibold leading-relaxed">
+                              Debes recoger <span className="text-red-200 text-lg font-bold">TODAS LAS ENERGÍAS</span> requeridas<br />
+                              <span className="text-orange-200 text-sm">antes de llegar al portal</span>
                             </p>
                           </div>
                         </div>
@@ -849,22 +955,29 @@ export default function GamePage() {
                   {currentLevel === 4 ? (
                     <>
                       <p className="text-base text-purple-200 mb-2">Comandos disponibles:</p>
-                      <div className="grid grid-cols-2 gap-4 max-w-md">
-                        <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30">
+                      <div className="relative max-w-md">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="flex flex-col items-center gap-2 p-4 bg-black/70 rounded-xl border border-emerald-400/30">
                           <img src={arrowRight} alt="Derecha" className="w-16 h-16 object-contain animate-pulse" />
                           <span className="text-sm text-emerald-200 font-semibold">D = Derecha</span>
                         </div>
-                        <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30">
+                          <div className="flex flex-col items-center gap-2 p-4 bg-black/70 rounded-xl border border-emerald-400/30">
                           <img src={arrowLeft} alt="Izquierda" className="w-16 h-16 object-contain animate-pulse" />
                           <span className="text-sm text-emerald-200 font-semibold">I = Izquierda</span>
                         </div>
-                        <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30">
+                          <div className="flex flex-col items-center gap-2 p-4 bg-black/70 rounded-xl border border-emerald-400/30">
                           <img src={arrowUp} alt="Arriba" className="w-16 h-16 object-contain animate-pulse" />
                           <span className="text-sm text-emerald-200 font-semibold">S = Subir</span>
                         </div>
-                        <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30">
+                          <div className="flex flex-col items-center gap-2 p-4 bg-black/70 rounded-xl border border-emerald-400/30">
                           <img src={arrowDown} alt="Abajo" className="w-16 h-16 object-contain animate-pulse" />
                           <span className="text-sm text-emerald-200 font-semibold">B = Bajar</span>
+                        </div>
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <span className="text-9xl font-extrabold text-red-500 drop-shadow-[0_0_35px_rgba(248,113,113,0.75)]">
+                            ✕
+                          </span>
                         </div>
                       </div>
                       <div className="mt-4 p-4 bg-black/40 rounded-xl border border-emerald-400/30 max-w-md">
@@ -881,36 +994,61 @@ export default function GamePage() {
                     <>
                       <div className="flex items-center justify-center max-w-4xl">
                         <div className="bg-black/40 rounded-xl border border-emerald-400/30 p-6">
-                          <p className="text-base text-purple-200 mb-4 text-center">Usa estas flechas del teclado:</p>
+                          <p className="text-base text-purple-200 mb-4 text-center">Usa estas flechas del panel de comandos:</p>
                           <div className="grid grid-cols-3 gap-4">
-                            <div></div>
-                            <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30 hover:scale-110 transition-transform cursor-pointer">
-                              <img src={arrowUp} alt="Arriba" className="w-16 h-16 object-contain" />
-                              <span className="text-sm text-emerald-200">↑</span>
+                            <div />
+                            <div className="group relative overflow-hidden rounded-2xl border border-blue-400/40 bg-gradient-to-br from-blue-700/80 via-indigo-600/80 to-purple-700/80 p-4 shadow-[0_0_30px_rgba(59,130,246,0.45)]">
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                              <div className="relative flex flex-col items-center gap-3">
+                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 via-indigo-400 to-violet-400 border border-white/40 shadow-[0_0_20px_rgba(129,140,248,0.6)] flex items-center justify-center">
+                                  <img src={arrowUp} alt="Arriba" className="w-10 h-10 object-contain" />
+                                </div>
+                                <span className="text-sm font-semibold text-blue-100 tracking-wide">↑</span>
+                              </div>
                             </div>
-                            <div></div>
-                            <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30 hover:scale-110 transition-transform cursor-pointer">
-                              <img src={arrowLeft} alt="Izquierda" className="w-16 h-16 object-contain" />
-                              <span className="text-sm text-emerald-200">←</span>
+                            <div />
+                            <div className="group relative overflow-hidden rounded-2xl border border-amber-400/40 bg-gradient-to-br from-amber-600/80 via-orange-500/80 to-amber-700/80 p-4 shadow-[0_0_30px_rgba(245,158,11,0.45)]">
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                              <div className="relative flex flex-col items-center gap-3">
+                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-300 via-orange-300 to-yellow-400 border border-white/40 shadow-[0_0_20px_rgba(253,230,138,0.6)] flex items-center justify-center">
+                                  <img src={arrowLeft} alt="Izquierda" className="w-10 h-10 object-contain" />
+                                </div>
+                                <span className="text-sm font-semibold text-amber-100 tracking-wide">←</span>
+                              </div>
                             </div>
-                            <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30">
-                              <img src={ninjaIcon} alt="Ninja" className="w-16 h-16 object-contain" />
-                              <span className="text-sm text-emerald-200">Ninja</span>
+                            <div className="group relative overflow-hidden rounded-2xl border border-emerald-400/40 bg-gradient-to-br from-emerald-700/80 via-teal-600/80 to-emerald-800/80 p-4 shadow-[0_0_30px_rgba(16,185,129,0.45)]">
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                              <div className="relative flex flex-col items-center gap-3">
+                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-300 via-teal-300 to-emerald-400 border border-white/40 shadow-[0_0_20px_rgba(110,231,183,0.6)] flex items-center justify-center">
+                                  <img src={ninjaIcon} alt="Ninja" className="w-10 h-10 object-contain" />
+                                </div>
+                                <span className="text-sm font-semibold text-emerald-100 tracking-wide">Ninja</span>
+                              </div>
                             </div>
-                            <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30 hover:scale-110 transition-transform cursor-pointer">
-                              <img src={arrowRight} alt="Derecha" className="w-16 h-16 object-contain" />
-                              <span className="text-sm text-emerald-200">→</span>
+                            <div className="group relative overflow-hidden rounded-2xl border border-amber-400/40 bg-gradient-to-br from-amber-600/80 via-orange-500/80 to-amber-700/80 p-4 shadow-[0_0_30px_rgba(245,158,11,0.45)]">
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                              <div className="relative flex flex-col items-center gap-3">
+                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-300 via-orange-300 to-yellow-400 border border-white/40 shadow-[0_0_20px_rgba(253,230,138,0.6)] flex items-center justify-center">
+                                  <img src={arrowRight} alt="Derecha" className="w-10 h-10 object-contain" />
+                                </div>
+                                <span className="text-sm font-semibold text-amber-100 tracking-wide">→</span>
+                              </div>
                             </div>
-                            <div></div>
-                            <div className="flex flex-col items-center gap-2 p-4 bg-black/40 rounded-xl border border-emerald-400/30 hover:scale-110 transition-transform cursor-pointer">
-                              <img src={arrowDown} alt="Abajo" className="w-16 h-16 object-contain" />
-                              <span className="text-sm text-emerald-200">↓</span>
+                            <div />
+                            <div className="group relative overflow-hidden rounded-2xl border border-blue-400/40 bg-gradient-to-br from-blue-700/80 via-indigo-600/80 to-purple-700/80 p-4 shadow-[0_0_30px_rgba(59,130,246,0.45)]">
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                              <div className="relative flex flex-col items-center gap-3">
+                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 via-indigo-400 to-violet-400 border border-white/40 shadow-[0_0_20px_rgba(129,140,248,0.6)] flex items-center justify-center">
+                                  <img src={arrowDown} alt="Abajo" className="w-10 h-10 object-contain" />
+                                </div>
+                                <span className="text-sm font-semibold text-blue-100 tracking-wide">↓</span>
+                              </div>
                             </div>
-                            <div></div>
+                            <div />
                           </div>
-                        </div>
-                      </div>
-                      {currentLevel === 1 && (
+                         </div>
+                       </div>
+                       {currentLevel === 1 && (
                         <>
                           <div className="mt-2 p-3 bg-gradient-to-r from-yellow-900/40 to-yellow-800/40 rounded-xl border border-yellow-400/30 max-w-md shadow-lg">
                             <p className="text-sm text-yellow-200 mb-1 flex items-center justify-center gap-2">
@@ -940,60 +1078,29 @@ export default function GamePage() {
               )}
 
               {/* Modal del nivel 6 - Sin líneas guía y con tiempo */}
-              {currentLevel === 6 && (
+              {currentLevel === 7 && (
                 <div className="flex flex-col items-center gap-3 py-2">
-                  {/* Mensaje destacado sobre el tiempo */}
-                  <div className="relative p-4 bg-gradient-to-r from-blue-900/60 via-blue-800/60 to-blue-900/60 rounded-xl border-2 border-blue-400/50 max-w-md shadow-lg shadow-blue-500/30">
-                    <div className="absolute inset-0 bg-blue-500/20 rounded-xl animate-pulse"></div>
-                    <div className="relative flex items-center gap-3">
-                      <span className="text-2xl">⏱️</span>
-                      <p className="text-sm font-semibold text-blue-200">
-                        <span className="text-yellow-300">¡Menos tiempo = Mejor clasificación!</span>
-                        <br />
-                        <span className="text-xs text-blue-300 mt-1 block">Optimiza tu estrategia para completar rápido</span>
-                      </p>
+                  <div className="relative max-w-lg w-full mx-auto">
+                    <div className="relative bg-gradient-to-br from-[#052a7a]/95 via-[#0a54ff]/85 to-[#36e1ff]/85 rounded-2xl border-2 border-blue-400/70 shadow-[0_0_35px_rgba(59,130,246,0.6)] p-6 overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#5ecbff]/30 to-transparent rounded-2xl shimmer-effect pointer-events-none" />
+                      <div className="relative flex flex-col items-center gap-3">
+                        <span className="text-[12rem] leading-none animate-pulse text-blue-50 drop-shadow-[0_0_35px_rgba(255,255,255,0.45)]">⏱️</span>
+                        <div className="text-center space-y-2">
+                          <h3 className="text-xl font-extrabold text-white drop-shadow-[0_0_18px_rgba(59,130,246,0.6)] uppercase tracking-wide">
+                            ¡Menos tiempo = Mejor clasificación!
+                          </h3>
+                          <p className="text-sm text-cyan-100 drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]">
+                            Optimiza tu estrategia para completar rápido
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="bg-black/40 rounded-xl border border-blue-400/30 p-4 max-w-md shadow-lg space-y-3">
-                    {/* Líneas guía desaparecen */}
-                    <div className="bg-gradient-to-r from-red-900/40 to-red-800/40 rounded-lg p-3 border border-red-500/50 shadow-md">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-red-400 text-lg">❌</span>
-                        <p className="text-sm text-red-200 font-semibold">Las líneas guía desaparecen</p>
-                      </div>
-                      <p className="text-xs text-red-300 ml-7">
-                        Ya no tendrás ayuda visual del camino. Debes planear tu ruta mentalmente.
-                      </p>
-                    </div>
-
-                    {/* Tiempo se activa */}
-                    <div className="bg-gradient-to-r from-blue-900/40 to-blue-800/40 rounded-lg p-3 border border-blue-500/50 shadow-md">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-blue-400 text-lg">⏰</span>
-                        <p className="text-sm text-blue-200 font-semibold">El reloj se activa</p>
-                      </div>
-                      <p className="text-xs text-blue-300 ml-7">
-                        Cada nivel tiene un tiempo. ¡Completalo lo antes posible!
-                      </p>
-                    </div>
-
-                    {/* Menos tiempo mejor */}
-                    <div className="bg-gradient-to-r from-emerald-900/40 to-emerald-800/40 rounded-lg p-3 border border-emerald-500/50 shadow-md">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-emerald-400 text-lg">⚡</span>
-                        <p className="text-sm text-emerald-200 font-semibold">Velocidad importa</p>
-                      </div>
-                      <p className="text-xs text-emerald-300 ml-7">
-                        Tu tiempo total se registra en el ranking. <strong className="text-emerald-200">Mientras menos tiempo, mejor posición.</strong>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 p-3 bg-gradient-to-r from-blue-900/40 to-blue-800/40 rounded-xl border border-blue-400/50 max-w-md shadow-lg">
-                    <p className="text-sm text-blue-300 text-center flex items-center justify-center gap-2">
+                  <div className="bg-gradient-to-r from-[#04194f]/90 via-[#08317e]/85 to-[#1265cc]/80 rounded-xl border border-blue-400/40 p-4 max-w-md shadow-[0_0_25px_rgba(59,130,246,0.5)]">
+                    <p className="text-sm text-blue-200 text-center flex items-center justify-center gap-2">
                       <span className="text-xl">💡</span>
-                      <span>Planifica bien tu ruta, <strong className="text-blue-200">cada segundo cuenta</strong> en tu clasificación</span>
+                      <span>Planifica bien tu ruta, <strong className="text-blue-50">cada segundo cuenta</strong> en tu clasificación</span>
                     </p>
                   </div>
                 </div>
@@ -1002,16 +1109,21 @@ export default function GamePage() {
               {/* Modal de Loops para nivel 11 */}
               {currentLevel === 11 && (
                 <div className="flex flex-col items-center gap-3 py-2">
-                  {/* Mensaje destacado sobre menos movimientos */}
-                  <div className="relative p-4 bg-gradient-to-r from-purple-900/60 via-purple-800/60 to-purple-900/60 rounded-xl border-2 border-purple-400/50 max-w-md shadow-lg shadow-purple-500/30">
-                    <div className="absolute inset-0 bg-purple-500/20 rounded-xl animate-pulse"></div>
-                    <div className="relative flex items-center gap-3">
-                      <span className="text-2xl">⚡</span>
-                      <p className="text-sm font-semibold text-purple-200">
-                        <span className="text-yellow-300">¡Menos movimientos = Mejor clasificación!</span>
-                        <br />
-                        <span className="text-xs text-purple-300 mt-1 block">Usa bucles para optimizar tu estrategia</span>
-                      </p>
+                  {/* Mensaje destacado sobre tiempo y movimientos */}
+                  <div className="relative max-w-lg w-full mx-auto">
+                    <div className="relative bg-gradient-to-br from-purple-900/90 via-indigo-900/85 to-purple-900/90 rounded-2xl border-2 border-purple-400/60 shadow-[0_0_30px_rgba(168,85,247,0.45)] p-6 overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-400/25 to-transparent rounded-2xl shimmer-effect pointer-events-none" />
+                      <div className="relative flex items-center gap-4 justify-center">
+                        <span className="text-5xl animate-pulse text-fuchsia-200 drop-shadow-[0_0_18px_rgba(232,121,249,0.6)]">⚡</span>
+                        <div className="text-left space-y-1">
+                          <h3 className="text-lg font-extrabold text-purple-100 drop-shadow-[0_0_16px_rgba(168,85,247,0.6)] uppercase tracking-wide">
+                            ¡Menos tiempo y movimientos = Mejor clasificación!
+                          </h3>
+                          <p className="text-sm text-purple-200 drop-shadow-[0_0_10px_rgba(124,58,237,0.5)]">
+                            Usa bucles inteligentes para optimizar cada intento y avanzar a la cima
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -1147,6 +1259,15 @@ export default function GamePage() {
                   Has completado los primeros 3 niveles. Para continuar y desbloquear todas las características del juego, necesitas crear una cuenta.
                 </p>
 
+                <div className="relative max-w-lg w-full mx-auto">
+                  <div className="relative bg-gradient-to-br from-amber-900/80 via-yellow-800/70 to-amber-900/80 rounded-2xl border-2 border-amber-500/60 shadow-2xl shadow-amber-500/50 p-4 overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/20 to-transparent rounded-2xl shimmer-effect pointer-events-none"></div>
+                    <p className="text-base text-amber-100 text-center font-semibold leading-relaxed">
+                      ¡Es rápido y gratuito! <span className="text-amber-200 text-lg font-bold">Solo necesitas tu email y cédula.</span>
+                    </p>
+                  </div>
+                </div>
+
                 {/* Beneficios destacados */}
                 <div className="w-full max-w-lg space-y-3 mt-4">
                   <div className="bg-gradient-to-r from-emerald-900/60 to-emerald-800/60 rounded-xl border border-emerald-400/40 p-4 shadow-lg">
@@ -1217,22 +1338,22 @@ export default function GamePage() {
                   <button
                     onClick={() => setShowCompletedModal(true)}
                     disabled={!currentUser || completedLevels.length === 0}
-                    className={`px-3 py-1 rounded flex items-center gap-1 text-sm border border-blue-400/40
+                    className={`px-3 py-1 rounded flex items-center gap-1 text-sm border border-blue-400/40 transition-all duration-200
                       ${!currentUser || completedLevels.length === 0
                         ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-60'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/30'}
+                        : 'bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 hover:from-blue-400 hover:via-indigo-400 hover:to-purple-400 text-white shadow-[0_0_15px_rgba(129,140,248,0.6)]'}
                     `}
                   >
                     <ListChecks size={16} />
-                    Niveles
+                    <span className="uppercase tracking-wide font-bold text-sm drop-shadow-[0_0_6px_rgba(191,219,254,0.7)]">Niveles</span>
                   </button>
 
                   <button
                     onClick={resetLevel}
-                    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded flex items-center gap-1 text-sm text-white shadow-md shadow-red-500/30"
+                    className="px-3 py-1 rounded flex items-center gap-1 text-sm text-white bg-gradient-to-r from-rose-600 via-red-600 to-orange-500 hover:from-rose-500 hover:via-red-500 hover:to-orange-400 shadow-[0_0_18px_rgba(248,113,113,0.65)] transition-all duration-200"
                   >
                     <RotateCcw size={16} />
-                    Reiniciar
+                    <span className="uppercase tracking-wide font-bold text-sm drop-shadow-[0_0_6px_rgba(254,202,202,0.7)]">Reiniciar</span>
                   </button>
                 </div>
               </div>
@@ -1276,7 +1397,7 @@ export default function GamePage() {
                   <div className="flex items-center gap-2 bg-blue-900/60 border border-blue-400/40 px-3 py-1 rounded-full shadow-md shadow-blue-500/20">
                     <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
                     <div className="text-sm font-semibold tracking-wide text-blue-200">
-                      {formatTime(elapsedTime)}
+                      {formatTime(currentTimerValue)}
                     </div>
                   </div>
                 )}
@@ -1297,10 +1418,9 @@ export default function GamePage() {
                     <span role="img" aria-label="moves">🦶</span>
                     <span>Movimientos: <span className="font-semibold text-white">{movesCount}</span></span>
                   </div>
-                  {levelInfo.timeLimit && (
+                  {typeof levelInfo.timeLimit === 'number' && (
                     <div className="flex items-center gap-2 text-blue-200">
-                      <span role="img" aria-label="time-limit">⏱️</span>
-                      <span>Tiempo límite: <span className="font-semibold text-white">{levelInfo.timeLimit}s</span></span>
+                      <span>Tiempo límite: <span className="font-semibold text-white">{formatTime(levelInfo.timeLimit)}</span></span>
                     </div>
                   )}
                   {levelInfo.hasGuideLines && <div className="text-yellow-400">💡 Líneas guía disponibles</div>}
@@ -1309,10 +1429,68 @@ export default function GamePage() {
               )}
             </div>
 
+          <div className="mt-4 flex justify-center">
+            <div className="bg-ninja-purple border border-emerald-400/30 rounded-lg px-6 py-4 shadow-[0_0_18px_rgba(16,185,129,0.25)]">
+              <p className="text-sm text-emerald-200 text-center font-semibold mb-3 tracking-wide">
+                Controla al ninja con los botones
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <span />
+                <button
+                  onClick={() => handleArrowInput('S')}
+                  className={`ninja-button flex flex-col items-center justify-center px-4 py-3 gap-1 ${
+                    level && level.level > 3 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  aria-label="Mover arriba"
+                  disabled={Boolean(level && level.level > 3)}
+                >
+                  <img src={arrowUp} alt="" className="w-14 h-14 select-none" />
+                  <span className="text-base font-bold tracking-wide">S</span>
+                </button>
+                <span />
+                <button
+                  onClick={() => handleArrowInput('I')}
+                  className={`ninja-button flex flex-col items-center justify-center px-4 py-3 gap-1 ${
+                    level && level.level > 3 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  aria-label="Mover izquierda"
+                  disabled={Boolean(level && level.level > 3)}
+                >
+                  <img src={arrowLeft} alt="" className="w-14 h-14 select-none" />
+                  <span className="text-base font-bold tracking-wide">I</span>
+                </button>
+                <button
+                  onClick={() => handleArrowInput('B')}
+                  className={`ninja-button flex flex-col items-center justify-center px-4 py-3 gap-1 ${
+                    level && level.level > 3 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  aria-label="Mover abajo"
+                  disabled={Boolean(level && level.level > 3)}
+                >
+                  <img src={arrowDown} alt="" className="w-14 h-14 select-none" />
+                  <span className="text-base font-bold tracking-wide">B</span>
+                </button>
+                <button
+                  onClick={() => handleArrowInput('D')}
+                  className={`ninja-button flex flex-col items-center justify-center px-4 py-3 gap-1 ${
+                    level && level.level > 3 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  aria-label="Mover derecha"
+                  disabled={Boolean(level && level.level > 3)}
+                >
+                  <img src={arrowRight} alt="" className="w-14 h-14 select-none" />
+                  <span className="text-base font-bold tracking-wide">D</span>
+                </button>
+              </div>
+            </div>
+            </div>
+
             {/* Commands */}
             <div className="bg-ninja-purple rounded-lg p-4 border border-blue-500/30">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="font-semibold">Comandos</h3>
+                <h3 className={`font-semibold text-yellow-300 drop-shadow-[0_0_10px_rgba(253,224,71,0.6)]`}>
+                  {level && level.level <= 3 ? 'Cada ACCIÓN genera un Comando' : 'Ahora TÚ debes INGRESAR los comandos'}
+                </h3>
                 <button
                   onClick={() => setShowHelp(!showHelp)}
                   className="text-blue-400 hover:text-blue-300"
@@ -1386,33 +1564,8 @@ export default function GamePage() {
               </div>
             )}
 
-            {/* Legend */}
-            <div className="bg-ninja-purple rounded-lg p-4 border border-blue-500/30">
-              <h3 className="font-semibold mb-3">Leyenda</h3>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <img src={safeTileImg} alt="Seguro" className="w-6 h-6 rounded-sm border border-blue-500/30" />
-                  <span>Seguro</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <img src={energyTileImg} alt="Energía" className="w-6 h-6 rounded-sm border border-blue-500/30" />
-                  <span>Energía</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <img src={voidTileImg} alt="Vacío" className="w-6 h-6 rounded-sm border border-blue-500/30 bg-black object-cover" />
-                  <span>Vacío</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <img src={snakeTileImg} alt="Serpiente" className="w-6 h-6 rounded-sm border border-blue-500/30" />
-                  <span>Serpiente</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <img src={doorTileImg} alt="Puerta" className="w-6 h-6 rounded-sm border border-blue-500/30" />
-                  <span>Puerta</span>
-                </div>
-              </div>
-            </div>
-            
+            {/* Legend eliminada según solicitud del usuario */}
+
           </div>
         </div>
       </div>
@@ -1497,27 +1650,29 @@ export default function GamePage() {
 
       {showFinalCelebration && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur">
-          <div className="relative w-full max-w-3xl mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)]">
+          <div className={`relative w-full max-w-3xl mx-6 overflow-hidden rounded-3xl border ${pendingLevelAfterCelebration ? 'border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)]' : 'border-yellow-500/60 bg-gradient-to-br from-[#140032] via-[#36009b] to-[#ff7300] shadow-[0_0_65px_rgba(255,175,0,0.6)]'}`}>
             <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse" />
-              <div className="absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-purple-500/40 blur-3xl animate-pulse delay-300" />
+              <div className={`absolute -top-16 -left-10 h-48 w-48 rounded-full ${pendingLevelAfterCelebration ? 'bg-emerald-500/40' : 'bg-[#ffbf00]/70'} blur-3xl animate-pulse`} />
+              <div className={`absolute -bottom-12 -right-10 h-56 w-56 rounded-full ${pendingLevelAfterCelebration ? 'bg-purple-500/40' : 'bg-[#ff0099]/60'} blur-3xl animate-pulse delay-300`} />
             </div>
 
             <div className="relative px-10 py-12 text-center space-y-6">
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-white drop-shadow-lg">
-                ¡Felicidades, Ninja!
+              <h2 className={`text-3xl sm:text-4xl font-extrabold drop-shadow-[0_0_25px_rgba(255,255,255,0.7)] ${pendingLevelAfterCelebration ? 'text-white' : 'text-yellow-200'}`}>
+                {pendingLevelAfterCelebration ? '¡Felicidades, Ninja!' : '¡Leyenda absoluta del código!'}
               </h2>
-              <p className="text-lg text-emerald-200 max-w-xl mx-auto">
-                Has completado los 15 niveles del Ninja Energy Quest. Demostraste disciplina, precisión y una lógica impecable.
+              <p className={`text-lg max-w-xl mx-auto ${pendingLevelAfterCelebration ? 'text-emerald-200' : 'text-yellow-100'}`}>
+                {pendingLevelAfterCelebration
+                  ? 'Has dominado los 14 niveles iniciales. Un reto de un solo comando te espera. ¡Inténtalo, supéralo y sorpréndete!'
+                  : '¡Eres el mejor! Domaste el nivel más difícil. Tu ADN programador está en la cima; creatividad y lógica hechas leyenda.'}
               </p>
               <div className="relative mx-auto flex flex-col items-center gap-4">
                 <div className="relative">
-                  <div className="absolute inset-0 rounded-full bg-emerald-400/40 blur-xl animate-ping" />
-                  <div className="relative flex items-center justify-center h-28 w-28 rounded-full border-4 border-emerald-300/70 bg-black/60 shadow-[0_0_25px_rgba(16,185,129,0.6)]">
-                    <span className="text-4xl">🧬</span>
+                  <div className={`absolute inset-0 rounded-full blur-xl animate-ping ${pendingLevelAfterCelebration ? 'bg-emerald-400/40' : 'bg-white/60'}`} />
+                  <div className={`relative flex items-center justify-center h-28 w-28 rounded-full border-4 ${pendingLevelAfterCelebration ? 'border-emerald-300/70 bg-black/60 shadow-[0_0_25px_rgba(16,185,129,0.6)]' : 'border-yellow-300/70 bg-black/70 shadow-[0_0_35px_rgba(255,255,255,0.6)]'}`}>
+                    <span className={`text-4xl ${pendingLevelAfterCelebration ? '' : 'animate-pulse text-yellow-200 drop-shadow-[0_0_20px_rgba(255,215,0,0.7)]'}`}>🧬</span>
                   </div>
                 </div>
-                <p className="text-base text-purple-200 max-w-md">
+                <p className={`text-base max-w-md ${pendingLevelAfterCelebration ? 'text-purple-200' : 'text-yellow-100'}`}>
                   Tu ADN programador ha sido analizado: creatividad + lógica en perfecto equilibrio. Estás listo para retos aún mayores.
                 </p>
               </div>
@@ -1526,27 +1681,33 @@ export default function GamePage() {
                 <button
                   onClick={() => {
                     setShowFinalCelebration(false)
+                    setPendingLevelAfterCelebration(null)
                     void loadLevel(1)
                   }}
                   className="w-full sm:w-auto px-5 py-3 rounded-xl bg-emerald-500 text-black font-semibold shadow-lg shadow-emerald-500/40 hover:bg-emerald-400 transition-colors"
                 >
                   Volver a practicar
                 </button>
+                {pendingLevelAfterCelebration && (
+                  <button
+                    onClick={() => {
+                      const nextLevel = pendingLevelAfterCelebration
+                      setShowFinalCelebration(false)
+                      setPendingLevelAfterCelebration(null)
+                      void loadLevel(nextLevel)
+                    }}
+                    className="w-full sm:w-auto px-5 py-3 rounded-xl bg-orange-500 text-white font-semibold shadow-lg shadow-orange-500/40 hover:bg-orange-400 transition-colors"
+                  >
+                    Continuar al nivel {pendingLevelAfterCelebration}
+                  </button>
+                )}
                 <Link
                   to="/ranking"
-                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/40 hover:bg-blue-400 transition-colors"
+                  className={`w-full sm:w-auto px-5 py-3 rounded-xl ${pendingLevelAfterCelebration ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40 hover:bg-blue-400' : 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/40 hover:bg-indigo-400'} transition-colors`}
                 >
                   Revisa tu ranking
                 </Link>
               </div>
-
-              <button
-                onClick={() => setShowFinalCelebration(false)}
-                className="inline-flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors"
-                type="button"
-              >
-                Cerrar celebración
-              </button>
             </div>
           </div>
         </div>
