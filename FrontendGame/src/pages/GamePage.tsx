@@ -1300,12 +1300,6 @@ export default function GamePage() {
                     </p>
                   </div>
                 </div>
-
-                <div className="mt-4 p-4 bg-black/50 rounded-xl border border-emerald-400/40">
-                  <p className="text-base text-emerald-200 font-semibold">
-                    ¡Es rápido y gratuito! Solo necesitas tu email y cédula.
-                  </p>
-                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
