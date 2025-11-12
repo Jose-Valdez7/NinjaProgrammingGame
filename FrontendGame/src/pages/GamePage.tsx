@@ -740,7 +740,7 @@ export default function GamePage() {
               stopTimer()
               setError('Hazlo en un solo comando para superar este nivel.')
               setIsPlaying(false)
-              gameEngineRef.current?.showNotification('Hazlo solo \n 1 comando', 0xff4444, 'defeat')
+              gameEngineRef.current?.showNotification('\nEncuentra el patron\nHazlo en solo \n 1 COMANDO', 0xff4444, 'defeat')
               return
             }
 

@@ -80,7 +80,7 @@ export class LevelGenerator {
         { direction: 'S', steps: 1 },
       ],
       repetitions: 4,
-      energyIndices: [6, 14, 22],
+      energyIndices: [6, 16, 22],
     },
     {
       name: 'triangle',
@@ -186,6 +186,11 @@ export class LevelGenerator {
   ): void {
     const pathKeys = new Set(path.map(pos => this.positionKey(pos)))
     const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
+
+    // Para el nivel 15, agregar obstáculos estratégicos para bloquear rutas alternativas
+    if (levelNumber === 15) {
+      this.blockAlternativeRoutesLevel15(grid, path, pathKeys, startPosition, doorPosition, energyPositions)
+    }
 
     const obstacleCount = Math.max(5, Math.floor(levelNumber * 1.5))
     const voidCount = Math.floor(obstacleCount * 0.4)
@@ -661,6 +666,136 @@ export class LevelGenerator {
       }
     }
     return count
+  }
+
+  private blockAlternativeRoutesLevel15(
+    grid: Cell[][],
+    path: { x: number; y: number }[],
+    pathKeys: Set<string>,
+    startPosition: { x: number; y: number },
+    doorPosition: { x: number; y: number },
+    energyPositions: { x: number; y: number }[]
+  ): void {
+    // Bloquear rutas alternativas como (d1,s2)x4 para el patrón wide-wave
+    // El patrón wide-wave es: (d3,s1,i2,s1)x4
+    // Necesitamos bloquear rutas que permitan (d1,s2)x4 u otros patrones alternativos
+
+    const startKey = this.positionKey(startPosition)
+    const doorKey = this.positionKey(doorPosition)
+    const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
+
+    // Bloquear celdas adyacentes al path que permitirían rutas alternativas
+    const obstaclesToPlace: Array<{ x: number; y: number; type: CellType }> = []
+
+    // Para cada celda del path, identificar y bloquear celdas adyacentes que permitirían atajos
+    path.forEach((pos, index) => {
+      const key = this.positionKey(pos)
+      if (key === startKey || key === doorKey || energyKeys.has(key)) {
+        return
+      }
+
+      // Direcciones adyacentes (derecha, izquierda, abajo, arriba)
+      const adjacent = [
+        { x: pos.x + 1, y: pos.y, dir: 'D' },     // Derecha
+        { x: pos.x - 1, y: pos.y, dir: 'I' },     // Izquierda
+        { x: pos.x, y: pos.y + 1, dir: 'B' },     // Abajo
+        { x: pos.x, y: pos.y - 1, dir: 'S' },     // Arriba
+      ]
+
+      adjacent.forEach(adj => {
+        if (adj.x < 0 || adj.x >= this.gridSize || adj.y < 0 || adj.y >= this.gridSize) {
+          return
+        }
+
+        const adjKey = this.positionKey(adj)
+        if (pathKeys.has(adjKey)) {
+          return // Es parte del path, no bloquear
+        }
+
+        const cell = grid[adj.y]?.[adj.x]
+        if (cell && cell.type === CellType.SAFE) {
+          // Bloquear celdas que permitirían rutas alternativas
+          // Especialmente cerca del inicio donde se podría intentar (d1,s2)
+          if (index < 8) {
+            // Cerca del inicio, bloquear agresivamente
+            obstaclesToPlace.push({ x: adj.x, y: adj.y, type: CellType.VOID })
+          } else {
+            // En otras partes, bloquear si está muy cerca del path
+            const isCloseToPath = path.some(p => {
+              const dist = Math.abs(p.x - adj.x) + Math.abs(p.y - adj.y)
+              return dist <= 1 && p !== pos
+            })
+            if (isCloseToPath) {
+              obstaclesToPlace.push({ x: adj.x, y: adj.y, type: CellType.VOID })
+            }
+          }
+        }
+      })
+    })
+
+    // Bloquear específicamente rutas que permitirían (d1,s2)x4
+    // Esta ruta requiere: d1 (derecha 1), s2 (arriba 2), repetido 4 veces
+    // Necesitamos bloquear las celdas que permitirían este patrón desde el inicio
+
+    // Bloquear celdas arriba del inicio que permitirían movimientos directos hacia arriba
+    for (let i = 1; i <= 3; i++) {
+      const aboveStart = { x: startPosition.x, y: startPosition.y - i }
+      if (aboveStart.y >= 0) {
+        const key = this.positionKey(aboveStart)
+        if (!pathKeys.has(key)) {
+          const cell = grid[aboveStart.y]?.[aboveStart.x]
+          if (cell && cell.type === CellType.SAFE) {
+            obstaclesToPlace.push({ x: aboveStart.x, y: aboveStart.y, type: CellType.VOID })
+          }
+        }
+      }
+    }
+
+    // Bloquear celdas que permitirían el patrón (d1,s2) desde posiciones tempranas del path
+    // Si hay una celda del path en posición (x, y), bloquear:
+    // - La celda a la derecha si no es parte del path (para bloquear d1)
+    // - Las celdas arriba de cualquier celda a la derecha del path (para bloquear s2 después de d1)
+    path.slice(0, 15).forEach((pos) => {
+      // Bloquear celda a la derecha si no es parte del path
+      const rightOfPath = { x: pos.x + 1, y: pos.y }
+      if (rightOfPath.x < this.gridSize) {
+        const rightKey = this.positionKey(rightOfPath)
+        if (!pathKeys.has(rightKey)) {
+          const cell = grid[rightOfPath.y]?.[rightOfPath.x]
+          if (cell && cell.type === CellType.SAFE) {
+            obstaclesToPlace.push({ x: rightOfPath.x, y: rightOfPath.y, type: CellType.VOID })
+          }
+        } else {
+          // Si la celda a la derecha ES parte del path, bloquear las celdas arriba de ella
+          // que permitirían hacer s2 directo (bloquear atajo)
+          for (let i = 1; i <= 2; i++) {
+            const aboveRight = { x: rightOfPath.x, y: rightOfPath.y - i }
+            if (aboveRight.y >= 0) {
+              const aboveKey = this.positionKey(aboveRight)
+              if (!pathKeys.has(aboveKey)) {
+                const cell = grid[aboveRight.y]?.[aboveRight.x]
+                if (cell && cell.type === CellType.SAFE) {
+                  obstaclesToPlace.push({ x: aboveRight.x, y: aboveRight.y, type: CellType.VOID })
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    // Aplicar los obstáculos (evitar duplicados)
+    const placedKeys = new Set<string>()
+    obstaclesToPlace.forEach(obstacle => {
+      const key = this.positionKey(obstacle)
+      if (!placedKeys.has(key) && !pathKeys.has(key) && key !== startKey && key !== doorKey && !energyKeys.has(key)) {
+        const cell = grid[obstacle.y]?.[obstacle.x]
+        if (cell && cell.type === CellType.SAFE) {
+          cell.type = obstacle.type
+          placedKeys.add(key)
+        }
+      }
+    })
   }
 
   private generateGuidePath(
