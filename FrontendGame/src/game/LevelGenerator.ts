@@ -75,7 +75,7 @@ export class LevelGenerator {
       start: { x: 2, y: 10 },
       pattern: [
         { direction: 'D', steps: 3 },
-        { direction: 'S', steps: 1 },
+        { direction: 'S', steps: 2 },
         { direction: 'I', steps: 2 },
         { direction: 'S', steps: 1 },
       ],
@@ -307,7 +307,53 @@ export class LevelGenerator {
     }
 
     const startPosition = { ...path[0] }
-    const originalDoorPosition = { ...path[path.length - 1] }
+    let originalDoorPosition = { ...path[path.length - 1] }
+    
+    // Para el nivel 15, colocar el portal al final del path completo (después de las 4 repeticiones)
+    if (levelNumber === 15) {
+      // El portal debe estar al final del path completo (índice 32 = última posición)
+      // Que corresponde a (5,4) después de completar las 4 repeticiones
+      if (path.length > 0) {
+        originalDoorPosition = { ...path[path.length - 1] }
+      } else {
+        originalDoorPosition = { x: 5, y: 4 }
+      }
+    } else {
+      // Para otros niveles, asegurar que el portal no esté en ninguna celda intermedia del path
+      const pathKeys = new Set<string>()
+      for (let i = 0; i < path.length - 1; i++) {
+        pathKeys.add(this.positionKey(path[i]))
+      }
+      
+      const finalPos = path[path.length - 1]
+      const finalKey = this.positionKey(finalPos)
+      
+      // Si la posición final está en el path intermedio, mover el portal
+      if (pathKeys.has(finalKey)) {
+        // Intentar mover el portal a una posición adyacente que no esté en el path
+        const adjacentPositions = [
+          { x: finalPos.x + 1, y: finalPos.y },
+          { x: finalPos.x - 1, y: finalPos.y },
+          { x: finalPos.x, y: finalPos.y + 1 },
+          { x: finalPos.x, y: finalPos.y - 1 },
+          { x: finalPos.x + 1, y: finalPos.y + 1 },
+          { x: finalPos.x - 1, y: finalPos.y - 1 },
+          { x: finalPos.x + 1, y: finalPos.y - 1 },
+          { x: finalPos.x - 1, y: finalPos.y + 1 },
+        ]
+        
+        for (const adjPos of adjacentPositions) {
+          if (adjPos.x >= 0 && adjPos.x < this.gridSize && adjPos.y >= 0 && adjPos.y < this.gridSize) {
+            const adjKey = this.positionKey(adjPos)
+            if (!pathKeys.has(adjKey) && adjKey !== this.positionKey(startPosition)) {
+              originalDoorPosition = { ...adjPos }
+              break
+            }
+          }
+        }
+      }
+    }
+    
     const doorPosition = this.markDoorArea(grid, originalDoorPosition)
 
     const energyPositions: { x: number; y: number }[] = []
@@ -364,7 +410,18 @@ export class LevelGenerator {
     const findByName = (name: string) => this.patternTemplates.find(template => template.name === name)
 
     if (levelNumber === 15) {
-      return findByName('wide-wave') ?? this.patternTemplates[0]
+      return {
+        name: 'level15-specific',
+        start: { x: 1, y: 8 },
+        pattern: [
+          { direction: 'D', steps: 3 },
+          { direction: 'S', steps: 2 },
+          { direction: 'I', steps: 1 },
+          { direction: 'B', steps: 1 },
+        ],
+        repetitions: 4,
+        energyIndices: [6, 14, 22],
+      }
     }
 
     if (levelNumber === 14) {
@@ -460,8 +517,8 @@ export class LevelGenerator {
     const row = grid[doorY]
     if (row) {
       const cell = row[doorX]
-      if (cell) {
-        cell.type = CellType.DOOR
+        if (cell) {
+          cell.type = CellType.DOOR
       }
     }
 
@@ -676,9 +733,10 @@ export class LevelGenerator {
     doorPosition: { x: number; y: number },
     energyPositions: { x: number; y: number }[]
   ): void {
-    // Bloquear rutas alternativas como (d1,s2)x4 para el patrón wide-wave
-    // El patrón wide-wave es: (d3,s1,i2,s1)x4
-    // Necesitamos bloquear rutas que permitan (d1,s2)x4 u otros patrones alternativos
+    // Bloquear rutas alternativas para el patrón del nivel 15
+    // El patrón es: (d3,s2,i1,b1)x5
+    // Necesitamos bloquear rutas que permitan otros patrones alternativos
+    // Bloquear agresivamente como antes
 
     const startKey = this.positionKey(startPosition)
     const doorKey = this.positionKey(doorPosition)
@@ -688,6 +746,7 @@ export class LevelGenerator {
     const obstaclesToPlace: Array<{ x: number; y: number; type: CellType }> = []
 
     // Para cada celda del path, identificar y bloquear celdas adyacentes que permitirían atajos
+    // Bloquear agresivamente como antes
     path.forEach((pos, index) => {
       const key = this.positionKey(pos)
       if (key === startKey || key === doorKey || energyKeys.has(key)) {
@@ -696,13 +755,13 @@ export class LevelGenerator {
 
       // Direcciones adyacentes (derecha, izquierda, abajo, arriba)
       const adjacent = [
-        { x: pos.x + 1, y: pos.y, dir: 'D' },     // Derecha
-        { x: pos.x - 1, y: pos.y, dir: 'I' },     // Izquierda
-        { x: pos.x, y: pos.y + 1, dir: 'B' },     // Abajo
-        { x: pos.x, y: pos.y - 1, dir: 'S' },     // Arriba
+        { x: pos.x + 1, y: pos.y },     // Derecha
+        { x: pos.x - 1, y: pos.y },     // Izquierda
+        { x: pos.x, y: pos.y + 1 },     // Abajo
+        { x: pos.x, y: pos.y - 1 },     // Arriba
       ]
 
-      adjacent.forEach(adj => {
+      adjacent.forEach((adj, adjIndex) => {
         if (adj.x < 0 || adj.x >= this.gridSize || adj.y < 0 || adj.y >= this.gridSize) {
           return
         }
@@ -714,11 +773,11 @@ export class LevelGenerator {
 
         const cell = grid[adj.y]?.[adj.x]
         if (cell && cell.type === CellType.SAFE) {
-          // Bloquear celdas que permitirían rutas alternativas
-          // Especialmente cerca del inicio donde se podría intentar (d1,s2)
+          // Bloquear agresivamente cerca del inicio
           if (index < 8) {
-            // Cerca del inicio, bloquear agresivamente
-            obstaclesToPlace.push({ x: adj.x, y: adj.y, type: CellType.VOID })
+            // Cerca del inicio, bloquear todas las celdas adyacentes
+            const obstacleType = (index + adjIndex) % 2 === 0 ? CellType.VOID : CellType.SNAKE
+            obstaclesToPlace.push({ x: adj.x, y: adj.y, type: obstacleType })
           } else {
             // En otras partes, bloquear si está muy cerca del path
             const isCloseToPath = path.some(p => {
@@ -733,10 +792,7 @@ export class LevelGenerator {
       })
     })
 
-    // Bloquear específicamente rutas que permitirían (d1,s2)x4
-    // Esta ruta requiere: d1 (derecha 1), s2 (arriba 2), repetido 4 veces
-    // Necesitamos bloquear las celdas que permitirían este patrón desde el inicio
-
+    // Bloquear específicamente rutas que permitirían patrones alternativos
     // Bloquear celdas arriba del inicio que permitirían movimientos directos hacia arriba
     for (let i = 1; i <= 3; i++) {
       const aboveStart = { x: startPosition.x, y: startPosition.y - i }
@@ -751,10 +807,7 @@ export class LevelGenerator {
       }
     }
 
-    // Bloquear celdas que permitirían el patrón (d1,s2) desde posiciones tempranas del path
-    // Si hay una celda del path en posición (x, y), bloquear:
-    // - La celda a la derecha si no es parte del path (para bloquear d1)
-    // - Las celdas arriba de cualquier celda a la derecha del path (para bloquear s2 después de d1)
+    // Bloquear celdas que permitirían patrones alternativos desde posiciones tempranas del path
     path.slice(0, 15).forEach((pos) => {
       // Bloquear celda a la derecha si no es parte del path
       const rightOfPath = { x: pos.x + 1, y: pos.y }
