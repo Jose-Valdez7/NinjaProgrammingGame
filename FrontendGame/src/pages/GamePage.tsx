@@ -19,6 +19,8 @@ import arrowDown from '@/assets/images/icons/abajo.png'
 import arrowLeft from '@/assets/images/icons/izquierda.png'
 import arrowRight from '@/assets/images/icons/derecha.png'
 import ninjaIcon from '@/assets/images/icons/Ninja.png'
+import krakeLogo from '@/assets/images/ui/Krake evolution Claro.png'
+import movilisLogo from '@/assets/images/ui/Movilis.png'
 
 const energyTileImg = new URL('../assets/energy/energy1.png', import.meta.url).href
 const voidTileImg = new URL('../assets/void/void1.png', import.meta.url).href
@@ -50,8 +52,9 @@ export default function GamePage() {
   const [showSnakeGameOver, setShowSnakeGameOver] = useState(false)
   const [showVoidGameOver, setShowVoidGameOver] = useState(false)
   const [energyRemaining, setEnergyRemaining] = useState(0)
-  const [maxLevelCompleted, setMaxLevelCompleted] = useState<number>(0)
+  const [maxLevelCompleted, setMaxLevelCompleted] = useState<number | null>(null)
   const [completedLevels, setCompletedLevels] = useState<number[]>([])
+  const [progressLoaded, setProgressLoaded] = useState(false)
   const [showCompletedModal, setShowCompletedModal] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [showIntroModal, setShowIntroModal] = useState(false)
@@ -150,11 +153,15 @@ export default function GamePage() {
     setError('Tu sesión expiró. Por favor, vuelve a iniciar sesión.')
   }, [dispatch, stopTimer])
 
+  const hasLoadedUserProgressRef = useRef(false)
+
   useEffect(() => {
     const fetchProgress = async () => {
       if (!currentUser) {
         setMaxLevelCompleted(0)
         setCompletedLevels([])
+        setProgressLoaded(true)
+        hasLoadedUserProgressRef.current = false
         return
       }
 
@@ -162,6 +169,10 @@ export default function GamePage() {
         setSessionExpired(false)
         setError('')
       }
+
+      // Resetear los flags cuando cambia el usuario para permitir cargar el nivel correcto
+      hasLoadedUserProgressRef.current = false
+      setProgressLoaded(false)
 
       try {
         const response = await fetch(apiUrl('api/user/progress'), {
@@ -181,15 +192,17 @@ export default function GamePage() {
         const maxLevel = Number(data?.maxLevelCompleted ?? 0)
         setMaxLevelCompleted(maxLevel)
         setCompletedLevels(maxLevel > 0 ? Array.from({ length: maxLevel }, (_, i) => i + 1) : [])
+        setProgressLoaded(true)
       } catch (err) {
         console.warn('Error cargando progreso del usuario:', err)
+        setProgressLoaded(true)
       }
     }
 
     void fetchProgress()
   }, [currentUser, handleSessionExpired, sessionExpired])
 
-  // 🧩 Inicializar motor Pixi y cargar primer nivel
+  // 🧩 Inicializar motor Pixi
   useLayoutEffect(() => {
     const container = canvasContainerRef.current
     if (!container || gameEngineRef.current) return
@@ -199,7 +212,19 @@ export default function GamePage() {
         const width = container.clientWidth || 480
         const height = container.clientHeight || 480
         gameEngineRef.current = new GameEngine(container, { width, height })
-        await loadLevel(currentLevel)
+        // Si no hay usuario, cargar nivel 1 inmediatamente para poder jugar
+        if (!currentUser) {
+          const levelGen = levelGeneratorRef.current
+          const newLevel = levelGen.generateLevel(1)
+          setLevel(newLevel)
+          setEnergyRemaining(newLevel.requiredEnergy || 0)
+          setCommands('')
+          setShowHelp(false)
+          await gameEngineRef.current.loadLevel(newLevel)
+          gameEngineRef.current.setGuideVisibility(false)
+          gameEngineRef.current.previewGuideForCommands([])
+          setCurrentLevel(1)
+        }
       } catch (e) {
         console.error('Error initializing GameEngine:', e)
         setError('Error al inicializar el motor gráfico. Recarga la página.')
@@ -299,7 +324,11 @@ export default function GamePage() {
       setShowIntroModal(true)
     } else if (levelNumber === 7) {
       setIntroTitle('Nivel 7')
-      setIntroMessage('¡Aumenta la dificultad! A partir de aquí se activa el reloj y las líneas guía desaparecen.')
+      setIntroMessage('¡Aumenta la dificultad! A partir de aquí se activa el reloj.')
+      setShowIntroModal(true)
+    } else if (levelNumber === 9) {
+      setIntroTitle('Nivel 9')
+      setIntroMessage('¡Atención! En los siguientes niveles las líneas guía desaparecen.')
       setShowIntroModal(true)
     } else if (levelNumber === 11) {
       setIntroTitle('Nivel 11: ¡Bucles!')
@@ -341,6 +370,44 @@ export default function GamePage() {
       },
     })
   }, [currentLevel, currentUser, loadLevel])
+
+  // Cargar automáticamente el nivel correcto cuando el usuario inicia sesión
+  // Solo se ejecuta cuando cambia el usuario o cuando se carga el progreso por primera vez
+  const userChangedRef = useRef<string | null>(null)
+  
+  useEffect(() => {
+    // Si el motor no está listo, no hacer nada
+    if (!gameEngineRef.current) {
+      return
+    }
+
+    // Si no hay usuario, no hacer nada (ya se cargó nivel 1 en useLayoutEffect)
+    if (!currentUser) {
+      hasLoadedUserProgressRef.current = false
+      userChangedRef.current = null
+      return
+    }
+
+    // Detectar si el usuario cambió
+    const userId = String(currentUser.id || currentUser.email || '')
+    if (userChangedRef.current !== userId) {
+      userChangedRef.current = userId
+      hasLoadedUserProgressRef.current = false // Resetear cuando cambia el usuario
+    }
+
+    // Si hay usuario, esperar a que se cargue el progreso
+    if (!progressLoaded || maxLevelCompleted === null) {
+      return
+    }
+
+    // Solo cargar automáticamente si no se ha cargado ningún nivel para este usuario
+    // Esto permite que el usuario navegue manualmente sin que se sobrescriba
+    if (!hasLoadedUserProgressRef.current) {
+      const expectedLevel = maxLevelCompleted >= 15 ? 15 : (maxLevelCompleted > 0 ? Math.min(maxLevelCompleted + 1, 15) : 1)
+      hasLoadedUserProgressRef.current = true
+      void loadLevel(expectedLevel)
+    }
+  }, [progressLoaded, maxLevelCompleted, currentUser, loadLevel])
 
   // 🔁 Reiniciar nivel
   const resetLevel = useCallback(() => loadLevel(currentLevel), [currentLevel, loadLevel])
@@ -407,11 +474,17 @@ export default function GamePage() {
         stopTimer()
         setIsPlaying(false)
         setError('Tiempo límite sobrepasado. ¡Vuelve a intentarlo!')
-      await resetLevel()
+        
+        // Mostrar overlay de derrota para niveles 7-10
+        if (currentLevel >= 7 && currentLevel <= 10) {
+          gameEngineRef.current?.showNotification('TIEMPO LIMITE \n AGOTADO', 0xff4444, 'defeat')
+        } else {
+          await resetLevel()
+        }
       }
 
       void handleTimeout()
-  }, [remainingTime, timerMode, resetLevel, stopTimer])
+  }, [remainingTime, timerMode, currentLevel])
 
   // 🧩 Validar y preparar comandos
   const prepareCommands = () => {
@@ -632,7 +705,7 @@ export default function GamePage() {
                       if (prev.includes(1)) return prev
                       return [...prev, 1].sort((a, b) => a - b)
                     })
-                    setMaxLevelCompleted(prev => Math.max(prev, 1))
+                    setMaxLevelCompleted(prev => Math.max(prev ?? 0, 1))
                   } else {
                     addOfflineProgress({
                       level: 1,
@@ -692,7 +765,7 @@ export default function GamePage() {
                   if (prev.includes(currentLevel)) return prev
                   return [...prev, currentLevel].sort((a, b) => a - b)
                 })
-                setMaxLevelCompleted(prev => Math.max(prev, currentLevel))
+                setMaxLevelCompleted(prev => Math.max(prev !== null ? prev : 0, currentLevel))
               } else if (response) {
                 console.warn('No se pudo registrar el avance del usuario')
               }
@@ -743,21 +816,21 @@ export default function GamePage() {
   const introModalContainerClass =
     level && (level.level === 4 || level.level === 11)
       ? 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-red-500/60 bg-gradient-to-br from-[#5a0412] via-[#a6101f] to-[#ff5722] shadow-[0_0_65px_rgba(248,113,113,0.6)] flex flex-col'
-      : level && level.level === 6
+      : level && (level.level === 7 || level.level === 9)
         ? 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-blue-500/60 bg-gradient-to-br from-[#051235] via-[#0c2ed1] to-[#21d4fd] shadow-[0_0_65px_rgba(59,130,246,0.55)] flex flex-col'
       : 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)] flex flex-col'
 
   const introModalGlowTopClass =
     level && (level.level === 4 || level.level === 11)
       ? 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-red-500/80 blur-2xl animate-pulse'
-      : level && level.level === 6
+      : level && (level.level === 7 || level.level === 9)
         ? 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-blue-400/80 blur-2xl animate-pulse'
       : 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse'
 
   const introModalGlowBottomClass =
     level && (level.level === 4 || level.level === 11)
       ? 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-orange-500/80 blur-2xl animate-pulse delay-300'
-      : level && level.level === 6
+      : level && (level.level === 7 || level.level === 9)
         ? 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-cyan-400/80 blur-2xl animate-pulse delay-300'
       : 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-purple-500/40 blur-3xl animate-pulse delay-300'
 
@@ -811,36 +884,54 @@ export default function GamePage() {
               </button>
             </div>
 
-            {completedLevels.length === 0 ? (
-              <p className="text-sm text-gray-300">Aún no has completado ningún nivel.</p>
+            {!currentUser ? (
+              <p className="text-sm text-gray-300">Inicia sesión para acceder a todos los niveles.</p>
             ) : (
               <div className="grid grid-cols-5 gap-2">
-                {completedLevels.map(levelNumber => (
-                  <button
-                    key={levelNumber}
-                    onClick={() => {
-                      setShowCompletedModal(false)
-                      void loadLevel(levelNumber)
-                    }}
-                    className={`
-                      w-12 h-12 rounded-lg flex items-center justify-center font-bold text-sm
-                      bg-gray-700 text-white border border-white/20 hover:bg-gray-600 transition-colors duration-200
-                    `}
-                  >
-                    {levelNumber}
-                  </button>
-                ))}
+                {Array.from({ length: 15 }, (_, i) => {
+                  const levelNumber = i + 1
+                  const isCompleted = completedLevels.includes(levelNumber)
+                  const isUnlocked = maxLevelCompleted !== null && (maxLevelCompleted === 0 ? levelNumber === 1 : levelNumber <= maxLevelCompleted + 1)
+                  
+                  return (
+                    <button
+                      key={levelNumber}
+                      onClick={() => {
+                        setShowCompletedModal(false)
+                        hasLoadedUserProgressRef.current = false // Permitir cargar el nivel seleccionado
+                        void loadLevel(levelNumber)
+                      }}
+                      disabled={!isUnlocked}
+                      className={`
+                        w-12 h-12 rounded-lg flex items-center justify-center font-bold text-sm
+                        transition-colors duration-200
+                        ${isUnlocked
+                          ? isCompleted
+                            ? 'bg-gray-700 text-white border border-white/20 hover:bg-gray-600'
+                            : 'bg-blue-600 text-white border border-blue-400/40 hover:bg-blue-500'
+                          : 'bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed opacity-50'
+                        }
+                      `}
+                      title={isUnlocked ? (isCompleted ? `Nivel ${levelNumber} completado` : `Jugar nivel ${levelNumber}`) : 'Nivel bloqueado'}
+                    >
+                      {levelNumber}
+                    </button>
+                  )
+                })}
               </div>
             )}
 
-            {completedLevels.length > 0 && (
+            {completedLevels.length > 0 && maxLevelCompleted !== null && (
               <p className="text-sm text-gray-200 mt-4">
                 Has completado hasta el nivel {maxLevelCompleted}.
               </p>
             )}
 
             <p className="text-xs text-gray-300 mt-4">
-              Selecciona un nivel completado para volver a practicarlo. Solo están disponibles los niveles que ya superaste.
+              {currentUser 
+                ? 'Selecciona cualquier nivel desbloqueado para jugarlo. Los niveles completados están en gris.'
+                : 'Inicia sesión para acceder a todos los niveles disponibles.'
+              }
             </p>
           </div>
         </div>
@@ -1106,6 +1197,63 @@ export default function GamePage() {
                 </div>
               )}
 
+              {/* Modal para nivel 9 - Líneas guía desaparecen */}
+              {currentLevel === 9 && (
+                <div className="flex flex-col items-center gap-4 py-2">
+                  <div className="relative max-w-lg w-full mx-auto">
+                    <div className="relative bg-gradient-to-br from-[#04194f]/90 via-[#08317e]/85 to-[#1265cc]/80 rounded-2xl border-2 border-blue-400/60 shadow-[0_0_30px_rgba(59,130,246,0.45)] p-6 overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-400/25 to-transparent rounded-2xl shimmer-effect pointer-events-none" />
+                      <div className="relative flex flex-col items-center gap-4">
+                        <h3 className="text-xl font-extrabold drop-shadow-[0_0_16px_rgba(248,113,113,0.6)] uppercase tracking-wide text-center">
+                          <span className="text-red-400">¡Atención!</span>
+                        </h3>
+                        <p className="text-lg font-bold text-center mt-2">
+                          <span className="text-yellow-300 drop-shadow-[0_0_12px_rgba(251,191,36,0.8)]">¡Ahora eres un NINJA PRO!</span><br />
+                          <span className="text-cyan-200 drop-shadow-[0_0_10px_rgba(34,211,238,0.6)]">Demuestra que puedes hacerlo sin guía</span>
+                        </p>
+                        <p className="text-sm text-blue-200 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] text-center">
+                          Las líneas guía ya no estarán disponibles en los siguientes niveles
+                        </p>
+                        
+                        {/* Línea guía visual con flecha */}
+                        <div className="w-full max-w-md mt-2">
+                          <svg width="100%" height="60" viewBox="0 0 300 60" className="overflow-visible">
+                            {/* Línea amarilla */}
+                            <path
+                              d="M 20 30 L 250 30"
+                              stroke="#fbbf24"
+                              strokeWidth="4"
+                              fill="none"
+                              strokeLinecap="round"
+                              opacity="0.9"
+                            />
+                            {/* Flecha al final */}
+                            <path
+                              d="M 250 30 L 235 20 M 250 30 L 235 40"
+                              stroke="#fbbf24"
+                              strokeWidth="4"
+                              fill="none"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              opacity="0.9"
+                            />
+                            {/* Efecto de brillo */}
+                            <path
+                              d="M 20 30 L 250 30"
+                              stroke="#ffd700"
+                              strokeWidth="2"
+                              fill="none"
+                              strokeLinecap="round"
+                              opacity="0.5"
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Modal de Loops para nivel 11 */}
               {currentLevel === 11 && (
                 <div className="flex flex-col items-center gap-3 py-2">
@@ -1326,8 +1474,20 @@ export default function GamePage() {
           {/* Canvas */}
           <div className="lg:col-span-2">
             <div className="bg-ninja-purple rounded-lg p-6 border border-blue-500/30 relative">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center mb-2">
                 <h2 className="text-xl font-semibold">Nivel {currentLevel}</h2>
+                <div className="flex items-center gap-12 py-0.1">
+                  <img 
+                    src={krakeLogo} 
+                    alt="Krake Evolution" 
+                    className="h-20 object-contain opacity-90 hover:opacity-100 transition-opacity"
+                  />
+                  <img 
+                    src={movilisLogo} 
+                    alt="Movilis" 
+                    className="h-20 object-contain opacity-90 hover:opacity-100 transition-opacity"
+                  />
+                </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowCompletedModal(true)}
@@ -1364,8 +1524,10 @@ export default function GamePage() {
 
           {/* Control Panel */}
           <div className="space-y-6">
-            {/* Hacker Cat - Arriba de todo */}
-            <div className="flex justify-center">
+            {/* Hacker Cat y Level Info lado a lado */}
+            <div className="flex items-start gap-4">
+              {/* Hacker Cat */}
+              <div className="flex-shrink-0">
               <div className="relative w-48 h-48 sm:w-56 sm:h-56">
                 {/* Halo brillante */}
                 <div className="absolute inset-0 rounded-xl blur-xl opacity-70"
@@ -1384,7 +1546,7 @@ export default function GamePage() {
             </div>
 
             {/* Level Info */}
-            <div className="bg-ninja-purple rounded-lg p-4 border border-blue-500/30">
+              <div className="flex-1 min-w-[280px] max-w-md bg-ninja-purple rounded-lg p-4 border border-blue-500/30">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold">Información del Nivel</h3>
                 {showTimer && (
@@ -1398,29 +1560,35 @@ export default function GamePage() {
               </div>
 
               {level && (
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-amber-300">
-                    <span role="img" aria-label="energy">⚡</span>
-                    <span>
+                <div className="space-y-2.5 text-sm">
+                  <div className="flex items-center gap-2.5 text-amber-300">
+                    <span role="img" aria-label="energy" className="text-base">⚡</span>
+                    <span className="flex-1">
                       Energía restante: <span className="font-semibold text-white">{levelInfo.energyRequired}</span>
                       {typeof levelInfo.totalEnergy === 'number' && (
                         <span className="text-sm text-amber-200"> / {levelInfo.totalEnergy}</span>
                       )}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-emerald-200">
-                    <span role="img" aria-label="moves">🦶</span>
-                    <span>Movimientos: <span className="font-semibold text-white">{movesCount}</span></span>
+                  <div className="flex items-center gap-2.5 text-emerald-200">
+                    <span role="img" aria-label="moves" className="text-base">🦶</span>
+                    <span className="flex-1">Movimientos: <span className="font-semibold text-white">{movesCount}</span></span>
                   </div>
                   {typeof levelInfo.timeLimit === 'number' && (
-                    <div className="flex items-center gap-2 text-blue-200">
-                      <span>Tiempo límite: <span className="font-semibold text-white">{formatTime(levelInfo.timeLimit)}</span></span>
+                    <div className="flex items-center gap-2.5 text-blue-200">
+                      <span className="flex-1">Tiempo límite: <span className="font-semibold text-white">{formatTime(levelInfo.timeLimit)}</span></span>
                     </div>
                   )}
-                  {levelInfo.hasGuideLines && <div className="text-yellow-400">💡 Líneas guía disponibles</div>}
+                  {levelInfo.hasGuideLines && (
+                    <div className="flex items-center gap-2.5 text-yellow-400">
+                      <span className="text-base">💡</span>
+                      <span>Líneas guía disponibles</span>
+                    </div>
+                  )}
 
                 </div>
               )}
+              </div>
             </div>
 
           <div className="mt-4 flex justify-center">
@@ -1496,7 +1664,7 @@ export default function GamePage() {
               <textarea
                 value={commands}
                 onChange={(e) => setCommands(e.target.value)}
-                placeholder="Ej: D3,S2,I1"
+                placeholder={level && level.level >= 11 && level.level <= 15 ? "Ej: (D1,S1)x3" : "Ej: D3,S2,I1"}
                 className="ninja-input w-full h-24 resize-none"
                 disabled={isPlaying || Boolean(level && level.level <= 3)}
               />
@@ -1559,7 +1727,7 @@ export default function GamePage() {
             )}
 
             {/* Legend eliminada según solicitud del usuario */}
-
+            
           </div>
         </div>
       </div>

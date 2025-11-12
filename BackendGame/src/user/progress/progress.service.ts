@@ -27,7 +27,21 @@ export class UserProgressService {
     success: boolean;
     failureType?: 'void' | 'snake';
   }) {
-    const alreadyCompletedLevel = await this.prisma.ranking.findUnique({
+    // Verificar si el nivel ya fue completado exitosamente en level_progress
+    const existingProgress = await this.prisma.levelProgress.findFirst({
+      where: {
+        userId,
+        level: progress.level,
+        success: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: { id: true },
+    });
+
+    // Verificar si el nivel ya está en rankings
+    const alreadyInRanking = await this.prisma.ranking.findUnique({
       where: {
         level_userId: {
           level: progress.level,
@@ -48,10 +62,13 @@ export class UserProgressService {
       },
     });
 
+    // Solo dar puntos si el nivel se completó exitosamente Y no había un progreso exitoso previo
+    // Si ya está en rankings pero no hay progreso exitoso previo, significa que se sincronizó offline
+    // y debemos dar los puntos. Si hay progreso exitoso previo, no dar puntos de nuevo.
     await this.applyScoreAdjustment(userId, {
       success: progress.success,
       failureType: progress.failureType,
-      alreadyCompletedLevel: Boolean(alreadyCompletedLevel),
+      alreadyCompletedLevel: Boolean(existingProgress),
     });
 
     if (progress.success) {
