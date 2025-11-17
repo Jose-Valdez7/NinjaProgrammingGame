@@ -224,6 +224,10 @@ export default function GamePage() {
           gameEngineRef.current.setGuideVisibility(false)
           gameEngineRef.current.previewGuideForCommands([])
           setCurrentLevel(1)
+          // Mostrar el modal introductorio del nivel 1 para jugadores sin sesión
+          setIntroTitle('Nivel 1')
+          setIntroMessage('Usa las flechas del panel de comandos para mover al ninja.')
+          setShowIntroModal(true)
         }
       } catch (e) {
         console.error('Error initializing GameEngine:', e)
