@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { GlobalExceptionFilter } from './common/exceptions/global-exception.filter';
 
 export async function createApp() {
   const app = await NestFactory.create(AppModule);
@@ -12,30 +13,39 @@ export async function createApp() {
   const nodeEnv = configService.get('NODE_ENV') || 'development';
   const allowedOrigins = configService.get('ALLOWED_ORIGINS');
 
-  // Enable CORS
-  let corsOrigin: string | boolean | string[] = true;
-  
+  // 🔹 Función para validar orígenes permitidos
+  const isVercelOrigin = (origin: string | undefined): boolean => {
+    if (!origin) return false;
+    return (
+      origin.includes('.vercel.app') ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1')
+    );
+  };
+
+  // 🔹 Configuración dinámica de CORS
+  let corsOrigin: string[] | ((origin: string | undefined, callback: Function) => void);
+
   if (nodeEnv === 'production') {
-    // En producción, usar FRONTEND_URL o ALLOWED_ORIGINS
-    if (allowedOrigins) {
-      corsOrigin = allowedOrigins.split(',').map(origin => origin.trim());
-    } else if (frontendUrl) {
-      corsOrigin = frontendUrl;
-    }
+    corsOrigin = (origin, callback) => {
+      if (!origin) return callback(null, false);
+      const allowed =
+        isVercelOrigin(origin) ||
+        origin === frontendUrl ||
+        (allowedOrigins && allowedOrigins.split(',').includes(origin));
+      if (allowed) callback(null, true);
+      else callback(new Error(`Origin ${origin} not allowed by CORS`), false);
+    };
   } else {
-    // En desarrollo, permitir localhost y otros orígenes comunes
     corsOrigin = [
       'http://localhost:3000',
-      'http://localhost:5173',
       'http://127.0.0.1:3000',
+      'http://localhost:5173',
       'http://127.0.0.1:5173',
     ];
-    if (allowedOrigins) {
-      const additionalOrigins = allowedOrigins.split(',').map(origin => origin.trim());
-      corsOrigin = [...(corsOrigin as string[]), ...additionalOrigins];
-    }
   }
 
+  // 🔹 Activar CORS globalmente
   app.enableCors({
     origin: corsOrigin,
     credentials: true,
@@ -43,7 +53,7 @@ export async function createApp() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Global validation pipe
+  // 🔹 Pipes y filtros globales
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -52,13 +62,21 @@ export async function createApp() {
     }),
   );
 
-  // Global prefix
+  app.useGlobalFilters(new GlobalExceptionFilter());
   app.setGlobalPrefix('api');
 
-  // Swagger configuration
+  // 🔹 Middleware de logging para debugging (solo en desarrollo)
+  if (process.env.REQUEST_LOGGING === 'true') {
+    app.use((req, res, next) => {
+      console.log(`🛰️ [${req.method}] ${req.url}`);
+      next();
+    });
+  }
+
+  // 🔹 Swagger
   const config = new DocumentBuilder()
     .setTitle('Ninja Energy Quest API')
-    .setDescription('API documentation for Ninja Energy Quest game')
+    .setDescription('API documentation for Ninja Energy Quest')
     .setVersion('1.0')
     .addBearerAuth(
       {
@@ -66,7 +84,6 @@ export async function createApp() {
         scheme: 'bearer',
         bearerFormat: 'JWT',
         name: 'JWT',
-        description: 'Enter JWT token',
         in: 'header',
       },
       'JWT-auth',
@@ -79,12 +96,10 @@ export async function createApp() {
   return app;
 }
 
-// Solo ejecuta el servidor localmente (NO en Vercel)
+// 🔹 Solo iniciar servidor local (Vercel no ejecuta esto)
 if (!process.env.VERCEL) {
   createApp().then(async (app) => {
     const port = process.env.PORT || 3001;
     await app.listen(port);
-    console.log(`🚀 Ninja Energy Quest API running on http://localhost:${port}/api`);
-    console.log(`📚 Swagger docs on http://localhost:${port}/api-docs`);
   });
 }

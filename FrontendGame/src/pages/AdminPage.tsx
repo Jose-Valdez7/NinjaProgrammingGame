@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Users, BarChart3, Settings, Shield, Trash2, Search } from 'lucide-react'
 import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
+import type { User } from '../types/game'
 
 
 export default function AdminPage() {
@@ -24,6 +25,9 @@ export default function AdminPage() {
   const [adminError, setAdminError] = useState('')
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<{ id: string | number; name: string } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const fetchSummary = async () => {
     try {
@@ -109,11 +113,17 @@ export default function AdminPage() {
     setSearch('')
   }
 
-  const handleDeleteUser = async (userId: string | number) => {
-    const confirmDelete = window.confirm('¿Seguro que quieres eliminar a este usuario?')
-    if (!confirmDelete) return
+  const handleDeleteUser = (userId: string | number, userName: string) => {
+    setUserToDelete({ id: userId, name: userName })
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return
+    
+    setIsDeleting(true)
     try {
-      const res = await fetch(apiUrl(`api/users/${userId}`), {
+      const res = await fetch(apiUrl(`api/users/${userToDelete.id}`), {
         method: 'DELETE',
         headers: getAuthHeaders(),
       })
@@ -122,12 +132,23 @@ export default function AdminPage() {
         throw new Error(text || 'No se pudo eliminar al usuario')
       }
       // refrescar datos
+      setShowDeleteConfirm(false)
+      setUserToDelete(null)
       fetchUsers(page, search)
       void fetchSummary()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error eliminando usuario'
       setError(msg)
+      setShowDeleteConfirm(false)
+      setUserToDelete(null)
+    } finally {
+      setIsDeleting(false)
     }
+  }
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false)
+    setUserToDelete(null)
   }
 
   const handleAdminLogin = async (e: React.FormEvent) => {
@@ -194,14 +215,22 @@ export default function AdminPage() {
       const parsed = json as { data?: { accessToken?: string; refreshToken?: string; user?: unknown } }
       const accessToken = parsed.data?.accessToken
       const refreshToken = parsed.data?.refreshToken
-      const adminUser = parsed.data?.user as unknown
+      const adminUser = parsed.data?.user as AdminUser
       if (!accessToken || !adminUser) throw new Error('Respuesta de admin inválida')
 
       // Limpiar credenciales de usuario y establecer las de admin
       authStorage.clearAll()
       authStorage.setAccessToken(accessToken)
       if (refreshToken) authStorage.setRefreshToken(refreshToken)
-      authStorage.setCurrentUser(adminUser)
+      // Convertir AdminUser a User (asegurando que id sea number)
+      const user: User = {
+        id: typeof adminUser.id === 'string' ? parseInt(adminUser.id, 10) : adminUser.id,
+        firstName: adminUser.firstName || '',
+        lastName: adminUser.lastName || '',
+        email: adminUser.email || '',
+        createdAt: new Date().toISOString(),
+      }
+      authStorage.setCurrentUser(user)
 
       setShowAdminModal(false)
       setAdminEmail('')
@@ -303,7 +332,7 @@ export default function AdminPage() {
                       <button
                         type="button"
                         className="text-red-400 hover:text-red-300 flex items-center gap-2"
-                        onClick={() => handleDeleteUser(u.id)}
+                        onClick={() => handleDeleteUser(u.id, `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || u.email || 'Usuario')}
                         title="Eliminar usuario"
                       >
                         <Trash2 size={18} />
@@ -397,6 +426,45 @@ export default function AdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-ninja-purple border border-red-500/40 rounded-xl w-full max-w-md mx-4 p-6 shadow-[0_0_30px_rgba(239,68,68,0.3)]">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-500/20 rounded-lg">
+                <Trash2 className="text-red-400" size={24} />
+              </div>
+              <h3 className="text-xl font-semibold text-white">Confirmar Eliminación</h3>
+            </div>
+
+            <p className="text-gray-300 mb-6">
+              ¿Seguro que quieres eliminar al usuario <span className="font-semibold text-white">{userToDelete?.name}</span>?
+            </p>
+            <p className="text-sm text-red-400 mb-6">
+              Esta acción no se puede deshacer.
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                className="px-5 py-2.5 rounded-lg border border-gray-600 hover:bg-gray-800 text-white transition-colors"
+                onClick={cancelDelete}
+                disabled={isDeleting}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-semibold shadow-lg shadow-red-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={confirmDeleteUser}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

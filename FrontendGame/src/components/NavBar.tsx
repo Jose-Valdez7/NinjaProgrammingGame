@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { LogIn, LogOut, Home, Trophy } from 'lucide-react'
 import { apiUrl, authStorage, getAuthHeaders } from '../config/env'
 import { useGameStore } from '../store/GameStore'
@@ -22,6 +22,7 @@ export default function NavBar() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [phone, setPhone] = useState('')
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const isLoggedIn = Boolean(currentUser)
 
@@ -159,8 +160,12 @@ export default function NavBar() {
   }
 
   const handleLogout = async () => {
+    setIsLoggingOut(true)
+    // Obtener el refreshToken antes de limpiar
+    const refreshToken = authStorage.getRefreshToken()
+    
+    // Hacer logout en el servidor
     try {
-      const refreshToken = authStorage.getRefreshToken()
       if (refreshToken) {
         await fetch(apiUrl('api/auth/logout'), {
           method: 'POST',
@@ -169,15 +174,28 @@ export default function NavBar() {
         })
       }
     } catch {}
-    finally {
+    
+    // Mostrar spinner por 3 segundos y luego limpiar y navegar
+    setTimeout(() => {
+      // Limpiar la sesión local
       authStorage.clearAll()
       dispatch({ type: 'SET_USER', payload: null })
-      navigate('/')
-    }
+      setIsLoggingOut(false)
+      // Navegar a la página principal (homepage)
+      navigate('/', { replace: true })
+    }, 3000)
   }
 
   return (
     <>
+      {isLoggingOut && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-xl font-semibold text-white">Cerrando sesión...</p>
+          </div>
+        </div>
+      )}
       <div className="bg-ninja-purple border-b border-blue-500/30 p-4">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">

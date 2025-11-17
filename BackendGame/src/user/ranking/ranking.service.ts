@@ -11,21 +11,18 @@ export class RankingService {
       const page = Math.max(1, Number(pagination?.page || 1));
       const limit = Math.max(1, Math.min(100, Number(pagination?.limit || 10)));
       const skip = (page - 1) * limit;
-      
-      // 1) Mejor nivel alcanzado (sobre todos los niveles)
+
       const maxLevelByUser = await this.prisma.ranking.groupBy({
         by: ['userId'],
         _max: { level: true },
       });
 
-      // 2) Sumas de comandos/tiempo SOLO de niveles 11 a 15
       const sumsLvl11To15 = await this.prisma.ranking.groupBy({
         by: ['userId'],
         where: { level: { gte: 11, lte: 15 } },
         _sum: { commandsUsed: true, timeTaken: true },
       });
 
-      // Si no hay registros, devolver vacío controlado
       if (!maxLevelByUser.length) {
         return {
           items: [],
@@ -39,7 +36,6 @@ export class RankingService {
         };
       }
 
-      // Cargar datos de usuario
       const userIds = maxLevelByUser.map(r => r.userId);
       const users = await this.prisma.user.findMany({
         where: { id: { in: userIds } },
@@ -91,6 +87,7 @@ export class RankingService {
       };
     } catch (error) {
       // Fallback silencioso: devolver lista vacía si hay error (migraciones pendientes o tabla sin columna)
+      console.error('❌ Error in RankingService.findAll:', error);
       const page = Math.max(1, Number(pagination?.page || 1));
       const limit = Math.max(1, Math.min(100, Number(pagination?.limit || 10)));
       return {

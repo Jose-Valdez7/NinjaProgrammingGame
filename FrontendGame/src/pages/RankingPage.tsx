@@ -16,17 +16,30 @@ export default function RankingPage() {
   const fetchRankings = async (p = 1) => {
     try {
       setError(null)
+      setLoading(true)
       const url = apiUrl(`api/rankings?page=${p}&limit=${limit}`)
+      console.log('🔍 Fetching rankings from:', url)
+      
+      // Agregar timeout de 30 segundos (las queries de ranking pueden tardar en Supabase)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
       
       const res = await fetch(url, {
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
       }).catch((fetchError) => {
+        clearTimeout(timeoutId)
         // Capturar errores de red (CORS, conexión, etc.)
         if (fetchError instanceof TypeError && fetchError.message.includes('fetch')) {
           throw new Error('No se pudo conectar con el servidor. Verifica que el backend esté corriendo en http://localhost:3001')
         }
+        if (fetchError.name === 'AbortError') {
+          throw new Error('La solicitud tardó demasiado. Inténtalo más tarde.')
+        }
         throw fetchError
       })
+      
+      clearTimeout(timeoutId)
 
       if (!res.ok) {
         const status = res.status
@@ -36,12 +49,25 @@ export default function RankingPage() {
         throw new Error(text || `Error ${status}`)
       }
 
-      const data = await res.json().catch(() => null)
-      if (!data || typeof data !== 'object') {
+      const jsonData = await res.json().catch(() => null)
+      if (!jsonData || typeof jsonData !== 'object') {
+        console.warn('⚠️ Ranking response is not an object:', jsonData)
         setRankings([])
         setMeta({ totalItems: 0, itemCount: 0, perPage: limit, totalPages: 1, currentPage: p })
         return
       }
+      
+      // El backend puede devolver { items, meta } directamente o envuelto en { data: { items, meta } }
+      const data = jsonData.data || jsonData
+      console.log('📊 Ranking data received:', { jsonData, data, hasItems: !!data?.items, itemsLength: data?.items?.length })
+      
+      if (!data || typeof data !== 'object') {
+        console.warn('⚠️ Ranking data is not valid:', data)
+        setRankings([])
+        setMeta({ totalItems: 0, itemCount: 0, perPage: limit, totalPages: 1, currentPage: p })
+        return
+      }
+      
       // data esperado: { items, meta }
       const mapped = (Array.isArray(data?.items) ? data.items : []).map((r: unknown, idx: number) => {
         const row = r as { userId: string; level: number; firstName: string; lastName: string; timeTaken: number; commandsUsed: number; score: number }

@@ -75,12 +75,12 @@ export class LevelGenerator {
       start: { x: 2, y: 10 },
       pattern: [
         { direction: 'D', steps: 3 },
-        { direction: 'S', steps: 1 },
+        { direction: 'S', steps: 2 },
         { direction: 'I', steps: 2 },
         { direction: 'S', steps: 1 },
       ],
       repetitions: 4,
-      energyIndices: [6, 14, 22],
+      energyIndices: [6, 16, 22],
     },
     {
       name: 'triangle',
@@ -101,9 +101,14 @@ export class LevelGenerator {
 
   public generateLevel(levelNumber: number): GameLevel {
     const grid = this.createEmptyGrid()
-    const hasGuideLines = levelNumber <= 5
+    const hasGuideLines = levelNumber <= 8 || (levelNumber >= 11 && levelNumber <= 14)
     const allowsLoops = levelNumber >= 11
-    const timeLimit = levelNumber >= 11 ? 60 : levelNumber === 10 ? 75 : undefined
+    let timeLimit: number | undefined
+    if (levelNumber >= 7 && levelNumber <= 8) {
+      timeLimit = 120
+    } else if (levelNumber >= 9 && levelNumber <= 10) {
+      timeLimit = 180
+    }
 
     const requiredEnergy = this.computeRequiredEnergy(levelNumber)
     const { startPosition, doorPosition, energyPositions } =
@@ -125,11 +130,24 @@ export class LevelGenerator {
   }
 
   private computeRequiredEnergy(levelNumber: number): number {
-    const baseRequiredEnergy = Math.min(levelNumber, 3)
-    if (levelNumber >= 6 && levelNumber <= 10) {
-      return 4
+    const specificEnergyByLevel: Record<number, number> = {
+      1: 1,
+      2: 2,
+      3: 3,
+      4: 1,
+      5: 1,
+      6: 2,
+      7: 1,
+      8: 2,
+      9: 1,
+      10: 2,
     }
-    return baseRequiredEnergy
+
+    if (Object.prototype.hasOwnProperty.call(specificEnergyByLevel, levelNumber)) {
+      return specificEnergyByLevel[levelNumber]
+    }
+
+    return Math.min(levelNumber, 3)
   }
 
   private buildPatternPath(template: PatternTemplate): { x: number; y: number }[] {
@@ -168,6 +186,11 @@ export class LevelGenerator {
   ): void {
     const pathKeys = new Set(path.map(pos => this.positionKey(pos)))
     const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
+
+    // Para el nivel 15, agregar obstáculos estratégicos para bloquear rutas alternativas
+    if (levelNumber === 15) {
+      this.blockAlternativeRoutesLevel15(grid, path, pathKeys, startPosition, doorPosition, energyPositions)
+    }
 
     const obstacleCount = Math.max(5, Math.floor(levelNumber * 1.5))
     const voidCount = Math.floor(obstacleCount * 0.4)
@@ -270,6 +293,8 @@ export class LevelGenerator {
       this.generateGuidePath(grid, startPosition, normalizedDoorPosition, energyPositions)
     }
 
+    this.ensureStartAccessibility(grid, startPosition)
+
     return { startPosition, doorPosition: normalizedDoorPosition, energyPositions }
   }
 
@@ -282,7 +307,53 @@ export class LevelGenerator {
     }
 
     const startPosition = { ...path[0] }
-    const originalDoorPosition = { ...path[path.length - 1] }
+    let originalDoorPosition = { ...path[path.length - 1] }
+    
+    // Para el nivel 15, colocar el portal al final del path completo (después de las 4 repeticiones)
+    if (levelNumber === 15) {
+      // El portal debe estar al final del path completo (índice 32 = última posición)
+      // Que corresponde a (5,4) después de completar las 4 repeticiones
+      if (path.length > 0) {
+        originalDoorPosition = { ...path[path.length - 1] }
+      } else {
+        originalDoorPosition = { x: 5, y: 4 }
+      }
+    } else {
+      // Para otros niveles, asegurar que el portal no esté en ninguna celda intermedia del path
+      const pathKeys = new Set<string>()
+      for (let i = 0; i < path.length - 1; i++) {
+        pathKeys.add(this.positionKey(path[i]))
+      }
+      
+      const finalPos = path[path.length - 1]
+      const finalKey = this.positionKey(finalPos)
+      
+      // Si la posición final está en el path intermedio, mover el portal
+      if (pathKeys.has(finalKey)) {
+        // Intentar mover el portal a una posición adyacente que no esté en el path
+        const adjacentPositions = [
+          { x: finalPos.x + 1, y: finalPos.y },
+          { x: finalPos.x - 1, y: finalPos.y },
+          { x: finalPos.x, y: finalPos.y + 1 },
+          { x: finalPos.x, y: finalPos.y - 1 },
+          { x: finalPos.x + 1, y: finalPos.y + 1 },
+          { x: finalPos.x - 1, y: finalPos.y - 1 },
+          { x: finalPos.x + 1, y: finalPos.y - 1 },
+          { x: finalPos.x - 1, y: finalPos.y + 1 },
+        ]
+        
+        for (const adjPos of adjacentPositions) {
+          if (adjPos.x >= 0 && adjPos.x < this.gridSize && adjPos.y >= 0 && adjPos.y < this.gridSize) {
+            const adjKey = this.positionKey(adjPos)
+            if (!pathKeys.has(adjKey) && adjKey !== this.positionKey(startPosition)) {
+              originalDoorPosition = { ...adjPos }
+              break
+            }
+          }
+        }
+      }
+    }
+    
     const doorPosition = this.markDoorArea(grid, originalDoorPosition)
 
     const energyPositions: { x: number; y: number }[] = []
@@ -330,6 +401,8 @@ export class LevelGenerator {
 
     this.reinforcePatternPath(grid, path, startPosition, doorPosition, energyPositions)
 
+    this.ensureStartAccessibility(grid, startPosition)
+
     return { startPosition, doorPosition, energyPositions }
   }
 
@@ -337,11 +410,26 @@ export class LevelGenerator {
     const findByName = (name: string) => this.patternTemplates.find(template => template.name === name)
 
     if (levelNumber === 15) {
-      return findByName('wide-wave') ?? this.patternTemplates[0]
+      return {
+        name: 'level15-specific',
+        start: { x: 1, y: 8 },
+        pattern: [
+          { direction: 'D', steps: 3 },
+          { direction: 'S', steps: 2 },
+          { direction: 'I', steps: 1 },
+          { direction: 'B', steps: 1 },
+        ],
+        repetitions: 4,
+        energyIndices: [6, 14, 22],
+      }
     }
 
     if (levelNumber === 14) {
       return findByName('triangle') ?? this.patternTemplates[0]
+    }
+
+    if (levelNumber === 13) {
+      return findByName('ladder') ?? this.patternTemplates[0]
     }
 
     if (levelNumber >= 11 && levelNumber <= 13) {
@@ -350,8 +438,11 @@ export class LevelGenerator {
         return assigned
       }
 
-      if (this.remainingAdvancedPatterns.length === 0) {
+      if (this.remainingAdvancedPatterns.length === 0 || levelNumber === 13) {
         this.remainingAdvancedPatterns = this.patternTemplates.filter(template => {
+          if (levelNumber <= 12) {
+            return template.name !== 'wide-wave' && template.name !== 'triangle' && template.name !== 'ladder'
+          }
           return template.name !== 'wide-wave' && template.name !== 'triangle'
         })
       }
@@ -403,51 +494,53 @@ export class LevelGenerator {
   }
 
   private randomDoorEdgePosition(edge: 'top' | 'bottom' | 'left' | 'right'): { x: number; y: number } {
-    const clamp = (value: number) => Math.max(0, Math.min(this.gridSize - 2, value))
+    const clamp = (value: number) => Math.max(0, Math.min(this.gridSize - 1, value))
 
     switch (edge) {
       case 'top':
         return { x: clamp(this.randomCoordinate()), y: 0 }
       case 'bottom':
-        return { x: clamp(this.randomCoordinate()), y: this.gridSize - 2 }
+        return { x: clamp(this.randomCoordinate()), y: this.gridSize - 1 }
       case 'left':
         return { x: 0, y: clamp(this.randomCoordinate()) }
       case 'right':
-        return { x: this.gridSize - 2, y: clamp(this.randomCoordinate()) }
+        return { x: this.gridSize - 1, y: clamp(this.randomCoordinate()) }
       default:
-        return { x: clamp(this.randomCoordinate()), y: this.gridSize - 2 }
+        return { x: clamp(this.randomCoordinate()), y: this.gridSize - 1 }
     }
   }
 
   private markDoorArea(grid: Cell[][], doorPosition: { x: number; y: number }): { x: number; y: number } {
-    const baseX = Math.max(0, Math.min(this.gridSize - 2, doorPosition.x))
-    const baseY = Math.max(0, Math.min(this.gridSize - 2, doorPosition.y))
+    const doorX = Math.max(0, Math.min(this.gridSize - 1, doorPosition.x))
+    const doorY = Math.max(0, Math.min(this.gridSize - 1, doorPosition.y))
 
-    for (let dy = 0; dy <= 1; dy++) {
-      for (let dx = 0; dx <= 1; dx++) {
-        const x = baseX + dx
-        const y = baseY + dy
-        const row = grid[y]
-        if (!row) continue
-
-        const cell = row[x]
+    const row = grid[doorY]
+    if (row) {
+      const cell = row[doorX]
         if (cell) {
           cell.type = CellType.DOOR
-        }
       }
     }
 
-    return { x: baseX, y: baseY }
+    return { x: doorX, y: doorY }
   }
 
   private randomCoordinate(): number {
     return Math.floor(Math.random() * this.gridSize)
   }
 
+  private computeEnergySpawnCount(levelNumber: number, requiredEnergy: number): number {
+    if (levelNumber <= 10) {
+      return requiredEnergy
+    }
+
+    const baseEnergyCount = Math.min(levelNumber, 3)
+    return Math.max(requiredEnergy, baseEnergyCount)
+  }
+
   private generateEnergyPositions(levelNumber: number, requiredEnergy: number): { x: number; y: number }[] {
     const positions: { x: number; y: number }[] = []
-    const baseEnergyCount = Math.min(levelNumber, 3)
-    const energyCount = Math.max(requiredEnergy, baseEnergyCount)
+    const energyCount = this.computeEnergySpawnCount(levelNumber, requiredEnergy)
 
     for (let i = 0; i < energyCount; i++) {
       let x: number, y: number
@@ -557,11 +650,7 @@ export class LevelGenerator {
     const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
     const doorKeys = new Set<string>()
 
-    for (let dy = 0; dy <= 1; dy++) {
-      for (let dx = 0; dx <= 1; dx++) {
-        doorKeys.add(this.positionKey({ x: doorPosition.x + dx, y: doorPosition.y + dy }))
-      }
-    }
+    doorKeys.add(this.positionKey(doorPosition))
 
     const startKey = this.positionKey(startPosition)
 
@@ -580,6 +669,49 @@ export class LevelGenerator {
     })
   }
 
+  private ensureStartAccessibility(
+    grid: Cell[][],
+    startPosition: { x: number; y: number }
+  ): void {
+    const directions = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 },
+    ]
+
+    const isPassable = (cell: Cell | undefined): boolean => {
+      if (!cell) return false
+      return cell.type === CellType.SAFE || cell.type === CellType.ENERGY || cell.type === CellType.DOOR
+    }
+
+    const hasPassableNeighbor = directions.some(dir => {
+      const nx = startPosition.x + dir.x
+      const ny = startPosition.y + dir.y
+      const row = grid[ny]
+      if (!row) return false
+      return isPassable(row[nx])
+    })
+
+    if (hasPassableNeighbor) {
+      return
+    }
+
+    for (const dir of directions) {
+      const nx = startPosition.x + dir.x
+      const ny = startPosition.y + dir.y
+      const row = grid[ny]
+      if (!row) continue
+      const cell = row[nx]
+      if (!cell) continue
+      if (cell.type === CellType.VOID || cell.type === CellType.SNAKE) {
+        cell.type = CellType.SAFE
+        cell.isPath = false
+        break
+      }
+    }
+  }
+
   private countHazards(grid: Cell[][]): number {
     let count = 0
     for (let y = 0; y < this.gridSize; y++) {
@@ -591,6 +723,132 @@ export class LevelGenerator {
       }
     }
     return count
+  }
+
+  private blockAlternativeRoutesLevel15(
+    grid: Cell[][],
+    path: { x: number; y: number }[],
+    pathKeys: Set<string>,
+    startPosition: { x: number; y: number },
+    doorPosition: { x: number; y: number },
+    energyPositions: { x: number; y: number }[]
+  ): void {
+    // Bloquear rutas alternativas para el patrón del nivel 15
+    // El patrón es: (d3,s2,i1,b1)x5
+    // Necesitamos bloquear rutas que permitan otros patrones alternativos
+    // Bloquear agresivamente como antes
+
+    const startKey = this.positionKey(startPosition)
+    const doorKey = this.positionKey(doorPosition)
+    const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
+
+    // Bloquear celdas adyacentes al path que permitirían rutas alternativas
+    const obstaclesToPlace: Array<{ x: number; y: number; type: CellType }> = []
+
+    // Para cada celda del path, identificar y bloquear celdas adyacentes que permitirían atajos
+    // Bloquear agresivamente como antes
+    path.forEach((pos, index) => {
+      const key = this.positionKey(pos)
+      if (key === startKey || key === doorKey || energyKeys.has(key)) {
+        return
+      }
+
+      // Direcciones adyacentes (derecha, izquierda, abajo, arriba)
+      const adjacent = [
+        { x: pos.x + 1, y: pos.y },     // Derecha
+        { x: pos.x - 1, y: pos.y },     // Izquierda
+        { x: pos.x, y: pos.y + 1 },     // Abajo
+        { x: pos.x, y: pos.y - 1 },     // Arriba
+      ]
+
+      adjacent.forEach((adj, adjIndex) => {
+        if (adj.x < 0 || adj.x >= this.gridSize || adj.y < 0 || adj.y >= this.gridSize) {
+          return
+        }
+
+        const adjKey = this.positionKey(adj)
+        if (pathKeys.has(adjKey)) {
+          return // Es parte del path, no bloquear
+        }
+
+        const cell = grid[adj.y]?.[adj.x]
+        if (cell && cell.type === CellType.SAFE) {
+          // Bloquear agresivamente cerca del inicio
+          if (index < 8) {
+            // Cerca del inicio, bloquear todas las celdas adyacentes
+            const obstacleType = (index + adjIndex) % 2 === 0 ? CellType.VOID : CellType.SNAKE
+            obstaclesToPlace.push({ x: adj.x, y: adj.y, type: obstacleType })
+          } else {
+            // En otras partes, bloquear si está muy cerca del path
+            const isCloseToPath = path.some(p => {
+              const dist = Math.abs(p.x - adj.x) + Math.abs(p.y - adj.y)
+              return dist <= 1 && p !== pos
+            })
+            if (isCloseToPath) {
+              obstaclesToPlace.push({ x: adj.x, y: adj.y, type: CellType.VOID })
+            }
+          }
+        }
+      })
+    })
+
+    // Bloquear específicamente rutas que permitirían patrones alternativos
+    // Bloquear celdas arriba del inicio que permitirían movimientos directos hacia arriba
+    for (let i = 1; i <= 3; i++) {
+      const aboveStart = { x: startPosition.x, y: startPosition.y - i }
+      if (aboveStart.y >= 0) {
+        const key = this.positionKey(aboveStart)
+        if (!pathKeys.has(key)) {
+          const cell = grid[aboveStart.y]?.[aboveStart.x]
+          if (cell && cell.type === CellType.SAFE) {
+            obstaclesToPlace.push({ x: aboveStart.x, y: aboveStart.y, type: CellType.VOID })
+          }
+        }
+      }
+    }
+
+    // Bloquear celdas que permitirían patrones alternativos desde posiciones tempranas del path
+    path.slice(0, 15).forEach((pos) => {
+      // Bloquear celda a la derecha si no es parte del path
+      const rightOfPath = { x: pos.x + 1, y: pos.y }
+      if (rightOfPath.x < this.gridSize) {
+        const rightKey = this.positionKey(rightOfPath)
+        if (!pathKeys.has(rightKey)) {
+          const cell = grid[rightOfPath.y]?.[rightOfPath.x]
+          if (cell && cell.type === CellType.SAFE) {
+            obstaclesToPlace.push({ x: rightOfPath.x, y: rightOfPath.y, type: CellType.VOID })
+          }
+        } else {
+          // Si la celda a la derecha ES parte del path, bloquear las celdas arriba de ella
+          // que permitirían hacer s2 directo (bloquear atajo)
+          for (let i = 1; i <= 2; i++) {
+            const aboveRight = { x: rightOfPath.x, y: rightOfPath.y - i }
+            if (aboveRight.y >= 0) {
+              const aboveKey = this.positionKey(aboveRight)
+              if (!pathKeys.has(aboveKey)) {
+                const cell = grid[aboveRight.y]?.[aboveRight.x]
+                if (cell && cell.type === CellType.SAFE) {
+                  obstaclesToPlace.push({ x: aboveRight.x, y: aboveRight.y, type: CellType.VOID })
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    // Aplicar los obstáculos (evitar duplicados)
+    const placedKeys = new Set<string>()
+    obstaclesToPlace.forEach(obstacle => {
+      const key = this.positionKey(obstacle)
+      if (!placedKeys.has(key) && !pathKeys.has(key) && key !== startKey && key !== doorKey && !energyKeys.has(key)) {
+        const cell = grid[obstacle.y]?.[obstacle.x]
+        if (cell && cell.type === CellType.SAFE) {
+          cell.type = obstacle.type
+          placedKeys.add(key)
+        }
+      }
+    })
   }
 
   private generateGuidePath(

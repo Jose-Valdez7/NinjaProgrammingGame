@@ -1,9 +1,16 @@
 {
   "version": 2,
   "builds": [
-    { "src": "vercel.ts", "use": "@vercel/node" }
+    {
+      "src": "api/index.ts",
+      "use": "@vercel/node",
+      "config": { "maxDuration": 10 }
+    }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "vercel.ts" }
+    {
+      "src": "/(.*)",
+      "dest": "api/index.ts"
+    }
   ]
 }
