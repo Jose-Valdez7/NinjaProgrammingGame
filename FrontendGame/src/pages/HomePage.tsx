@@ -166,7 +166,7 @@ export default function HomePage() {
           <div className="relative inline-block">
             <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight" style={{ textShadow: '0 0 28px rgba(34,211,238,0.45), 0 0 52px rgba(244,63,94,0.35)' }}>
               <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-emerald-300 bg-clip-text text-transparent">
-                Descubre tu gen programador
+                Descubre tu GEN programador
               </span>
             </h1>
             {/* Barra de brillo animado sobre el título */}

@@ -11,14 +11,21 @@ export default function RankingPage() {
   const [page, setPage] = useState(1)
   const [limit] = useState(10)
   const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const fetchRankings = async (p = 1) => {
+  const fetchRankings = async (p = 1, search = '') => {
     try {
       setError(null)
       setLoading(true)
-      const url = apiUrl(`api/rankings?page=${p}&limit=${limit}`)
-      console.log('🔍 Fetching rankings from:', url)
+      const params = new URLSearchParams({
+        page: String(p),
+        limit: String(limit),
+      })
+      if (search.trim()) {
+        params.append('search', search.trim())
+      }
+      const url = apiUrl(`api/rankings?${params.toString()}`)
       
       // Agregar timeout de 30 segundos (las queries de ranking pueden tardar en Supabase)
       const controller = new AbortController()
@@ -59,7 +66,6 @@ export default function RankingPage() {
       
       // El backend puede devolver { items, meta } directamente o envuelto en { data: { items, meta } }
       const data = jsonData.data || jsonData
-      console.log('📊 Ranking data received:', { jsonData, data, hasItems: !!data?.items, itemsLength: data?.items?.length })
       
       if (!data || typeof data !== 'object') {
         console.warn('⚠️ Ranking data is not valid:', data)
@@ -70,8 +76,8 @@ export default function RankingPage() {
       
       // data esperado: { items, meta }
       const mapped = (Array.isArray(data?.items) ? data.items : []).map((r: unknown, idx: number) => {
-        const row = r as { userId: string; level: number; firstName: string; lastName: string; timeTaken: number; commandsUsed: number; score: number }
-        const globalPosition = (page - 1) * limit + idx + 1
+        const row = r as { userId: string; level: number; firstName: string; lastName: string; timeTaken: number; commandsUsed: number; score: number; position?: number }
+        const globalPosition = row.position ?? (page - 1) * limit + idx + 1
         return {
           key: `${row.userId}-${row.level}-${globalPosition}`,
           userId: row.userId,
@@ -96,9 +102,9 @@ export default function RankingPage() {
   }
 
   useEffect(() => {
-    fetchRankings(page)
+    fetchRankings(page, searchTerm)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page])
+  }, [page, searchTerm])
 
   return (
     <div className="min-h-screen bg-ninja-dark text-white">
@@ -107,6 +113,32 @@ export default function RankingPage() {
           <div className="flex items-center gap-3 mb-6">
             <Trophy className="text-yellow-400" size={32} />
             <h2 className="text-2xl font-bold">Mejores Ninjas</h2>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <label className="text-sm text-gray-300 font-medium flex-shrink-0 flex items-center">
+              Buscar por nombre:
+            </label>
+            <div className="flex-1">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setPage(1)
+                    setSearchTerm(e.target.value)
+                  }}
+                  placeholder="Ej: Enrique, Jose, Stefanny..."
+                  className="w-full bg-black/40 border border-blue-400/40 rounded-lg py-2 pl-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-300 text-white placeholder-gray-400"
+                />
+                <span className="absolute inset-y-0 right-3 flex items-center text-gray-400">
+                  🔍
+                </span>
+              </div>
+              <p className="text-xs text-gray-300 mt-1">
+                Filtra los ninjas del ranking actual por su nombre o apellido.
+              </p>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -165,11 +197,13 @@ export default function RankingPage() {
             </table>
           </div>
 
-          {rankings.length === 0 && (
-            <div className="text-center py-8 text-gray-400">
-              No hay datos de ranking disponibles
-            </div>
-          )}
+        {rankings.length === 0 && !loading && !error && (
+          <div className="text-center py-8 text-gray-400">
+            {searchTerm.trim()
+              ? 'No encontramos ninjas que coincidan con tu búsqueda.'
+              : 'No hay datos de ranking disponibles'}
+          </div>
+        )}
         </div>
 
         <div className="flex items-center justify-between mt-6">

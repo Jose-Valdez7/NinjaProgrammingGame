@@ -11,15 +11,16 @@ export class RankingService {
       const page = Math.max(1, Number(pagination?.page || 1));
       const limit = Math.max(1, Math.min(100, Number(pagination?.limit || 10)));
       const skip = (page - 1) * limit;
+      const search = (pagination?.search || '').trim().toLowerCase();
 
       const maxLevelByUser = await this.prisma.ranking.groupBy({
         by: ['userId'],
         _max: { level: true },
       });
 
-      const sumsLvl11To15 = await this.prisma.ranking.groupBy({
+      const sumsLvl14To20 = await this.prisma.ranking.groupBy({
         by: ['userId'],
-        where: { level: { gte: 11, lte: 15 } },
+        where: { level: { gte: 14, lte: 20 } },
         _sum: { commandsUsed: true, timeTaken: true },
       });
 
@@ -44,7 +45,7 @@ export class RankingService {
       const userMap = new Map(users.map(u => [u.id, u] as const));
 
       // Preparar filas combinadas
-      const sumsMap = new Map(sumsLvl11To15.map(s => [s.userId, s] as const));
+      const sumsMap = new Map(sumsLvl14To20.map(s => [s.userId, s] as const));
 
       const combined = maxLevelByUser.map(r => {
         const user = userMap.get(r.userId);
@@ -71,8 +72,20 @@ export class RankingService {
         return a.timeTaken - b.timeTaken;
       });
 
-      const total = combined.length;
-      const paginated = combined.slice(skip, skip + limit);
+      const combinedWithPosition = combined.map((row, idx) => ({
+        ...row,
+        position: idx + 1,
+      }));
+
+      const filtered = search
+        ? combinedWithPosition.filter(row => {
+            const fullName = `${row.firstName ?? ''} ${row.lastName ?? ''}`.trim().toLowerCase();
+            return fullName.includes(search);
+          })
+        : combinedWithPosition;
+
+      const total = filtered.length;
+      const paginated = filtered.slice(skip, skip + limit);
       const totalPages = Math.max(1, Math.ceil(total / limit));
 
       return {

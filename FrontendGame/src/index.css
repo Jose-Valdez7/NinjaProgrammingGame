@@ -1,5 +1,5 @@
-/* Importar fuentes japonesas */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&family=Noto+Serif+JP:wght@300;400;500;700;900&family=M+PLUS+Rounded+1c:wght@300;400;500;700;800;900&family=Yuji+Boku:wght@400&family=Stick:wght@400&display=swap');
+/* Importar fuentes */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap');
 
 /* Importar animaciones de la historia */
 @import './styles/story-animations.css';
@@ -21,43 +21,43 @@
   }
   
   html {
-    font-family: 'Stick', sans-serif;
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
   
-  /* Aplicar Stick a todos los elementos */
+  /* Aplicar Roboto a todos los elementos */
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Stick', sans-serif;
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
   
   p, span, div, button, input, textarea, select {
-    font-family: 'Stick', sans-serif;
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
   
   a, li, ul, ol {
-    font-family: 'Stick', sans-serif;
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
 }
 
 @layer components {
   /* Fuentes japonesas */
   .font-japanese {
-    font-family: 'Stick', sans-serif;
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
   
   .font-japanese-serif {
-    font-family: 'Stick', sans-serif;
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
   
   .font-japanese-rounded {
-    font-family: 'Stick', sans-serif;
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
   
   .font-yuji-boku {
-    font-family: 'Stick', sans-serif;
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
   
   .font-stick {
-    font-family: 'Stick', sans-serif;
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
   
   .ninja-button {

@@ -2,6 +2,9 @@ import { Command, LoopCommand } from '../types/game'
 
 type ParseOptions = {
   requireCommaAfterCommand?: boolean
+  level?: number
+  startPosition?: { x: number; y: number }
+  doorPosition?: { x: number; y: number }
 }
 
 type ParseState = {
@@ -53,6 +56,7 @@ export class CommandParser {
           i,
           {
             requireCommaAfterCommand: requireComma,
+            level: options.level,
           },
           rootState
         )
@@ -63,7 +67,10 @@ export class CommandParser {
           continue
         } else {
           rootState.invalidToken = true
-          rootState.invalidMessage = 'Comando incorrecto.'
+          // Solo sobrescribir el mensaje si no hay uno más específico ya establecido
+          if (!rootState.invalidMessage) {
+            rootState.invalidMessage = 'Comando incorrecto.'
+          }
         }
       } else {
         // Parse single command
@@ -75,7 +82,10 @@ export class CommandParser {
           continue
         } else {
           rootState.invalidToken = true
-          rootState.invalidMessage = 'Comando incorrecto.'
+          // Solo sobrescribir el mensaje si no hay uno más específico ya establecido
+          if (!rootState.invalidMessage) {
+            rootState.invalidMessage = 'Comando incorrecto.'
+          }
         }
       }
 
@@ -164,6 +174,15 @@ export class CommandParser {
     const repetitions = parseInt(numberStr, 10)
     if (isNaN(repetitions) || repetitions <= 0) return null
     
+    // Validar que para niveles 14-20, los bucles deben tener al menos 2 repeticiones
+    if (options.level !== undefined && options.level >= 14 && options.level <= 20) {
+      if (repetitions < 2) {
+        state.invalidToken = true
+        state.invalidMessage = 'Comando incorrecto: debe repetirse por lo menos 2 veces'
+        return null
+      }
+    }
+    
     // Convert parsed commands to Command type
     const commands: Command[] = []
     for (const cmd of parsedInnerCommands) {
@@ -193,6 +212,30 @@ export class CommandParser {
     state.commaError = true
   }
 
+  private calculateFinalPosition(commands: (Command | LoopCommand)[], startPosition: { x: number; y: number }): { x: number; y: number } {
+    const expanded = this.expandCommands(commands)
+    let currentPos = { ...startPosition }
+    
+    for (const cmd of expanded) {
+      switch (cmd.direction) {
+        case 'D':
+          currentPos.x += cmd.steps
+          break
+        case 'I':
+          currentPos.x -= cmd.steps
+          break
+        case 'S':
+          currentPos.y -= cmd.steps
+          break
+        case 'B':
+          currentPos.y += cmd.steps
+          break
+      }
+    }
+    
+    return currentPos
+  }
+
   public expandCommands(commands: (Command | LoopCommand)[]): Command[] {
     const expanded: Command[] = []
     
@@ -216,6 +259,29 @@ export class CommandParser {
   ): { isValid: boolean; error?: string } {
     try {
       const commands = this.parseCommands(input, options)
+      
+      // Validar bucles con repetición mínima para niveles 14-20
+      if (options.level !== undefined && options.level >= 14 && options.level <= 20) {
+        for (const cmd of commands) {
+          if ('repetitions' in cmd && cmd.repetitions < 2) {
+            return {
+              isValid: false,
+              error: 'Comando incorrecto: debe repetirse por lo menos 2 veces',
+            }
+          }
+        }
+        
+        // Validar que el bucle termine exactamente en el portal
+        if (options.startPosition && options.doorPosition) {
+          const finalPosition = this.calculateFinalPosition(commands, options.startPosition)
+          if (finalPosition.x !== options.doorPosition.x || finalPosition.y !== options.doorPosition.y) {
+            return {
+              isValid: false,
+              error: 'Comando incorrecto: el patrón del bucle debe terminar exactamente en el portal',
+            }
+          }
+        }
+      }
 
       if (this.lastCommaError) {
         return {

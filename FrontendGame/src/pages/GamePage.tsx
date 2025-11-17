@@ -293,11 +293,11 @@ export default function GamePage() {
 
     if (levelNumber >= 7 && levelNumber <= 8) {
       nextTimerMode = 'countdown'
-      countdownLimit = 120
-    } else if (levelNumber >= 9 && levelNumber <= 10) {
+      countdownLimit = 70
+    } else if (levelNumber >= 9 && levelNumber <= 13) {
       nextTimerMode = 'countdown'
-      countdownLimit = 180
-    } else if (levelNumber >= 11) {
+      countdownLimit = 90
+    } else if (levelNumber >= 14) {
       nextTimerMode = 'countup'
     }
 
@@ -337,8 +337,8 @@ export default function GamePage() {
       setIntroTitle('Nivel 9')
       setIntroMessage('¡Atención! En los siguientes niveles las líneas guía desaparecen.')
       setShowIntroModal(true)
-    } else if (levelNumber === 11) {
-      setIntroTitle('Nivel 11: ¡Bucles!')
+    } else if (levelNumber === 14) {
+      setIntroTitle('Nivel 14: ¡Bucles!')
       setIntroMessage('¡Ahora puedes usar bucles! Repite secuencias de comandos con (comandos)xN')
       setShowIntroModal(true)
     } else {
@@ -359,12 +359,22 @@ export default function GamePage() {
           return
         }
 
-        if (currentLevel >= 14) {
-          if (currentLevel === 14) {
-            setPendingLevelAfterCelebration(currentLevel + 1)
-          } else {
-            setPendingLevelAfterCelebration(null)
-          }
+        if (currentLevel === 14) {
+          // El nivel 14 avanza directamente al 15 sin mostrar modal
+          void loadLevel(currentLevel + 1)
+          return
+        }
+
+        if (currentLevel === 19) {
+          // Modal verde del nivel 14 ahora para el nivel 19, con botón para continuar al 20
+          setPendingLevelAfterCelebration(20)
+          setShowFinalCelebration(true)
+          return
+        }
+
+        if (currentLevel === 20) {
+          // Modal amarillo del nivel 15 ahora para el nivel 20
+          setPendingLevelAfterCelebration(null)
           setShowFinalCelebration(true)
           return
         }
@@ -411,7 +421,7 @@ export default function GamePage() {
     // Solo cargar automáticamente si no se ha cargado ningún nivel para este usuario
     // Esto permite que el usuario navegue manualmente sin que se sobrescriba
     if (!hasLoadedUserProgressRef.current && !manualLevelSelectionRef.current) {
-      const expectedLevel = maxLevelCompleted >= 15 ? 15 : (maxLevelCompleted > 0 ? Math.min(maxLevelCompleted + 1, 15) : 1)
+      const expectedLevel = maxLevelCompleted >= 20 ? 20 : (maxLevelCompleted > 0 ? Math.min(maxLevelCompleted + 1, 20) : 1)
       hasLoadedUserProgressRef.current = true
       void loadLevel(expectedLevel)
     }
@@ -499,15 +509,20 @@ export default function GamePage() {
     const parser = commandParserRef.current
     const trimmed = commands.trim()
     const requireComma = Boolean(level && level.level >= 4)
+    const currentLevelNum = level?.level ?? currentLevel
     const validation = parser.validateCommands(trimmed, {
       requireCommaAfterCommand: requireComma,
+      level: currentLevelNum,
+      startPosition: level?.startPosition,
+      doorPosition: level?.doorPosition,
     })
     if (!validation.isValid) throw new Error(validation.error || 'Comando incorrecto.')
     const parsed = parser.parseCommands(trimmed, {
       requireCommaAfterCommand: requireComma,
+      level: currentLevelNum,
     })
     const expanded = parser.expandCommands(parsed)
-    const commandCount = level && level.level >= 11 ? parsed.length : 0
+    const commandCount = level && level.level >= 14 ? parsed.length : 0
 
     return { expanded, commandCount }
   }
@@ -590,6 +605,20 @@ export default function GamePage() {
     }
   }, [])
 
+  const handleDefeatOverlayComplete = useCallback(() => {
+    gameEngineRef.current?.showNotification('GAME OVER', 0xff4444, 'defeat')
+  }, [])
+
+  const handleSnakeGameOverClose = useCallback(() => {
+    setShowSnakeGameOver(false)
+    handleDefeatOverlayComplete()
+  }, [handleDefeatOverlayComplete])
+
+  const handleVoidGameOverClose = useCallback(() => {
+    setShowVoidGameOver(false)
+    handleDefeatOverlayComplete()
+  }, [handleDefeatOverlayComplete])
+
   const triggerEnergyCutscene = useCallback(() => {
     if (hasShownEnergyCutsceneRef.current) {
       return Promise.resolve()
@@ -659,7 +688,7 @@ export default function GamePage() {
               timeTaken: getTimeTaken(),
               failureType: 'void',
             })
-            gameEngineRef.current?.showNotification('GAME OVER', 0xff4444, 'defeat')
+            setShowVoidGameOver(true)
             return
           }
 
@@ -675,7 +704,7 @@ export default function GamePage() {
               timeTaken: getTimeTaken(),
               failureType: 'snake',
             })
-            gameEngineRef.current?.showNotification('GAME OVER', 0xff4444, 'defeat')
+            setShowSnakeGameOver(true)
             return
           }
 
@@ -743,7 +772,7 @@ export default function GamePage() {
               return
             }
 
-            const requiresSingleCommand = currentLevel >= 11 && currentLevel <= 15
+            const requiresSingleCommand = currentLevel >= 14 && currentLevel <= 20
             if (requiresSingleCommand && commandCount !== 1) {
               stopTimer()
               setError('Hazlo en un solo comando para superar este nivel.')
@@ -819,24 +848,24 @@ export default function GamePage() {
     allowsLoops: level.allowsLoops
   } : {}
 
-  const isAdvancedLoopLevel = Boolean(level && level.level >= 11)
+  const isAdvancedLoopLevel = Boolean(level && level.level >= 14)
 
   const introModalContainerClass =
-    level && (level.level === 4 || level.level === 11)
+    level && (level.level === 4 || level.level === 14)
       ? 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-red-500/60 bg-gradient-to-br from-[#5a0412] via-[#a6101f] to-[#ff5722] shadow-[0_0_65px_rgba(248,113,113,0.6)] flex flex-col'
       : level && (level.level === 7 || level.level === 9)
         ? 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-blue-500/60 bg-gradient-to-br from-[#051235] via-[#0c2ed1] to-[#21d4fd] shadow-[0_0_65px_rgba(59,130,246,0.55)] flex flex-col'
       : 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)] flex flex-col'
 
   const introModalGlowTopClass =
-    level && (level.level === 4 || level.level === 11)
+    level && (level.level === 4 || level.level === 14)
       ? 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-red-500/80 blur-2xl animate-pulse'
       : level && (level.level === 7 || level.level === 9)
         ? 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-blue-400/80 blur-2xl animate-pulse'
       : 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse'
 
   const introModalGlowBottomClass =
-    level && (level.level === 4 || level.level === 11)
+    level && (level.level === 4 || level.level === 14)
       ? 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-orange-500/80 blur-2xl animate-pulse delay-300'
       : level && (level.level === 7 || level.level === 9)
         ? 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-cyan-400/80 blur-2xl animate-pulse delay-300'
@@ -858,7 +887,7 @@ export default function GamePage() {
 
           <div className="flex items-center gap-4">
             <div className="text-sm">
-              Nivel: <span className="font-bold text-blue-400">{currentLevel}/15</span>
+              Nivel: <span className="font-bold text-blue-400">{currentLevel}/20</span>
             </div>
             {currentUser && (
               <div className="text-sm">
@@ -896,22 +925,22 @@ export default function GamePage() {
               <p className="text-sm text-gray-300">Inicia sesión para acceder a todos los niveles.</p>
             ) : (
               <div className="grid grid-cols-5 gap-2">
-                {Array.from({ length: 15 }, (_, i) => {
+                {Array.from({ length: 20 }, (_, i) => {
                   const levelNumber = i + 1
                   const isCompleted = completedLevels.includes(levelNumber)
                   const isUnlocked = maxLevelCompleted !== null && (maxLevelCompleted === 0 ? levelNumber === 1 : levelNumber <= maxLevelCompleted + 1)
                   
                   return (
-                    <button
-                      key={levelNumber}
-                      onClick={() => {
-                        setShowCompletedModal(false)
+                  <button
+                    key={levelNumber}
+                    onClick={() => {
+                      setShowCompletedModal(false)
                         manualLevelSelectionRef.current = true
-                        void loadLevel(levelNumber)
-                      }}
+                      void loadLevel(levelNumber)
+                    }}
                       disabled={!isUnlocked}
-                      className={`
-                        w-12 h-12 rounded-lg flex items-center justify-center font-bold text-sm
+                    className={`
+                      w-12 h-12 rounded-lg flex items-center justify-center font-bold text-sm
                         transition-colors duration-200
                         ${isUnlocked
                           ? isCompleted
@@ -921,9 +950,9 @@ export default function GamePage() {
                         }
                       `}
                       title={isUnlocked ? (isCompleted ? `Nivel ${levelNumber} completado` : `Jugar nivel ${levelNumber}`) : 'Nivel bloqueado'}
-                    >
-                      {levelNumber}
-                    </button>
+                  >
+                    {levelNumber}
+                  </button>
                   )
                 })}
               </div>
@@ -1262,8 +1291,8 @@ export default function GamePage() {
                 </div>
               )}
 
-              {/* Modal de Loops para nivel 11 */}
-              {currentLevel === 11 && (
+              {/* Modal de Loops para nivel 14 */}
+              {currentLevel === 14 && (
                 <div className="flex flex-col items-center gap-3 py-2">
                   {/* Mensaje destacado sobre tiempo y movimientos */}
                   <div className="relative max-w-lg w-full mx-auto">
@@ -1672,7 +1701,7 @@ export default function GamePage() {
               <textarea
                 value={commands}
                 onChange={(e) => setCommands(e.target.value)}
-                placeholder={level && level.level >= 11 && level.level <= 15 ? "Ej: (D1,S1)x3" : "Ej: D3,S2,I1"}
+                placeholder={level && level.level >= 14 && level.level <= 20 ? "Ej: (D1,S1)x3" : "Ej: D3,S2,I1"}
                 className="ninja-input w-full h-24 resize-none"
                 disabled={isPlaying || Boolean(level && level.level <= 3)}
               />
@@ -1750,16 +1779,10 @@ export default function GamePage() {
               muted
               playsInline
               className="w-full h-full object-contain rounded-lg"
-              onEnded={() => {
-                setShowSnakeGameOver(false)
-                resetLevel()
-              }}
+              onEnded={handleSnakeGameOverClose}
             />
             <button
-              onClick={() => {
-                setShowSnakeGameOver(false)
-                resetLevel()
-              }}
+              onClick={handleSnakeGameOverClose}
               className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
             >
               Continuar
@@ -1800,16 +1823,10 @@ export default function GamePage() {
               muted
               playsInline
               className="w-full h-full object-contain rounded-lg"
-              onEnded={() => {
-                setShowVoidGameOver(false)
-                resetLevel()
-              }}
+              onEnded={handleVoidGameOverClose}
             />
             <button
-              onClick={() => {
-                setShowVoidGameOver(false)
-                resetLevel()
-              }}
+              onClick={handleVoidGameOverClose}
               className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
             >
               Continuar
@@ -1832,7 +1849,7 @@ export default function GamePage() {
               </h2>
               <p className={`text-lg max-w-xl mx-auto ${pendingLevelAfterCelebration ? 'text-emerald-200' : 'text-yellow-100'}`}>
                 {pendingLevelAfterCelebration
-                  ? 'Has dominado los 14 niveles iniciales. Un reto de un solo comando te espera. ¡Inténtalo, supéralo y sorpréndete!'
+                  ? 'Has dominado los 19 niveles iniciales. Un reto de un solo comando te espera. ¡Inténtalo, supéralo y sorpréndete!'
                   : '¡Eres el mejor! Domaste el nivel más difícil. Tu ADN programador está en la cima; creatividad y lógica hechas leyenda.'}
               </p>
               <div className="relative mx-auto flex flex-col items-center gap-4">
