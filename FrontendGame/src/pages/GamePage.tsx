@@ -154,6 +154,7 @@ export default function GamePage() {
   }, [dispatch, stopTimer])
 
   const hasLoadedUserProgressRef = useRef(false)
+  const manualLevelSelectionRef = useRef(false)
 
   useEffect(() => {
     const fetchProgress = async () => {
@@ -162,6 +163,7 @@ export default function GamePage() {
         setCompletedLevels([])
         setProgressLoaded(true)
         hasLoadedUserProgressRef.current = false
+        manualLevelSelectionRef.current = false
         return
       }
 
@@ -172,6 +174,7 @@ export default function GamePage() {
 
       // Resetear los flags cuando cambia el usuario para permitir cargar el nivel correcto
       hasLoadedUserProgressRef.current = false
+      manualLevelSelectionRef.current = false
       setProgressLoaded(false)
 
       try {
@@ -388,6 +391,7 @@ export default function GamePage() {
     // Si no hay usuario, no hacer nada (ya se cargó nivel 1 en useLayoutEffect)
     if (!currentUser) {
       hasLoadedUserProgressRef.current = false
+      manualLevelSelectionRef.current = false // reset manual override when user changes
       userChangedRef.current = null
       return
     }
@@ -406,7 +410,7 @@ export default function GamePage() {
 
     // Solo cargar automáticamente si no se ha cargado ningún nivel para este usuario
     // Esto permite que el usuario navegue manualmente sin que se sobrescriba
-    if (!hasLoadedUserProgressRef.current) {
+    if (!hasLoadedUserProgressRef.current && !manualLevelSelectionRef.current) {
       const expectedLevel = maxLevelCompleted >= 15 ? 15 : (maxLevelCompleted > 0 ? Math.min(maxLevelCompleted + 1, 15) : 1)
       hasLoadedUserProgressRef.current = true
       void loadLevel(expectedLevel)
@@ -902,7 +906,7 @@ export default function GamePage() {
                       key={levelNumber}
                       onClick={() => {
                         setShowCompletedModal(false)
-                        hasLoadedUserProgressRef.current = false // Permitir cargar el nivel seleccionado
+                        manualLevelSelectionRef.current = true
                         void loadLevel(levelNumber)
                       }}
                       disabled={!isUnlocked}
