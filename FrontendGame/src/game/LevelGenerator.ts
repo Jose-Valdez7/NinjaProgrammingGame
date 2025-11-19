@@ -532,6 +532,51 @@ export class LevelGenerator {
       }
     }
 
+    // Asegurar que la posición solicitada sea SAFE en el nivel 11
+    if (levelNumber === 11) {
+      const ensureSafe = (x: number, y: number) => {
+        const cell = grid[y]?.[x]
+        if (cell) {
+          cell.type = CellType.SAFE
+          cell.isPath = false
+        }
+      }
+      ensureSafe(0, 1)
+      ensureSafe(2, 0)
+    }
+
+    if (levelNumber === 12) {
+      const ensureSafe = (x: number, y: number) => {
+        const cell = grid[y]?.[x]
+        if (cell) {
+          cell.type = CellType.SAFE
+          cell.isPath = false
+        }
+      }
+      ensureSafe(1, 9)
+      ensureSafe(2, 9)
+    }
+
+    if (levelNumber === 13) {
+      const ensureSafe = (x: number, y: number) => {
+        const cell = grid[y]?.[x]
+        if (cell) {
+          cell.type = CellType.SAFE
+          cell.isPath = false
+        }
+      }
+      ensureSafe(1, 10)
+      ensureSafe(2, 10)
+      ensureSafe(3, 10)
+      ensureSafe(4, 10)
+      ensureSafe(5, 10)
+      ensureSafe(5, 9)
+      ensureSafe(5, 9)
+      ensureSafe(10, 0)
+      ensureSafe(10, 1)
+      ensureSafe(10, 2)
+    }
+
     const isInsideGrid = (pos: { x: number; y: number }) =>
       pos.x >= 0 && pos.y >= 0 && pos.x < this.gridSize && pos.y < this.gridSize
 

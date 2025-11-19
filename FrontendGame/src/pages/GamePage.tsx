@@ -604,6 +604,30 @@ export default function GamePage() {
     engine.previewGuideForCommands(expanded)
   }, [commands, level])
 
+  // Actualizar conteo de comandos para nivel 13 (sin guías)
+  useEffect(() => {
+    const currentLevelData = level as GameLevel | null
+    if (!currentLevelData || currentLevel !== 13) return
+
+    const trimmed = commands.trim()
+    if (!trimmed) {
+      setMovesCount(0)
+      return
+    }
+
+    try {
+      const parser = commandParserRef.current
+      const requireComma = currentLevel >= 4
+      const parsed = parser.parseCommands(trimmed, {
+        requireCommaAfterCommand: requireComma,
+        level: currentLevel,
+      })
+      setMovesCount(parsed.length)
+    } catch {
+      // Si hay error de parsing, no actualizar el contador
+    }
+  }, [commands, level, currentLevel])
+
   // ⚡ Ejecutar comandos
   const handleEnergyVideoClose = useCallback(() => {
     setShowEnergyCutscene(false)
