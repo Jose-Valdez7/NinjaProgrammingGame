@@ -24,6 +24,18 @@
     font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
   
+  /* Zoom solo para la página del juego */
+  .game-page-container {
+    zoom: 0.7;
+    transform-origin: top left;
+  }
+  
+  /* Zoom para la página principal */
+  .home-page-container {
+    zoom: 0.85;
+    transform-origin: top left;
+  }
+  
   /* Aplicar Roboto a todos los elementos */
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;

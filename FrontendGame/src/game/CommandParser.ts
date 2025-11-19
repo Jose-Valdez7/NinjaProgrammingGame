@@ -283,6 +283,21 @@ export class CommandParser {
         }
       }
 
+      // Validar comandos consecutivos repetidos para niveles 11-13
+      if (options.level !== undefined && options.level >= 11 && options.level <= 13) {
+        const expanded = this.expandCommands(commands)
+        for (let i = 0; i < expanded.length - 1; i++) {
+          const current = expanded[i]
+          const next = expanded[i + 1]
+          if (current.direction === next.direction) {
+            return {
+              isValid: false,
+              error: `Comando repetido: ${current.direction}${current.steps},${next.direction}${next.steps} debe ser ${current.direction}${current.steps + next.steps}. Hazlo en un solo comando.`,
+            }
+          }
+        }
+      }
+
       if (this.lastCommaError) {
         return {
           isValid: false,

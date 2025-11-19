@@ -103,11 +103,10 @@ export default function RankingPage() {
 
   useEffect(() => {
     fetchRankings(page, searchTerm)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, searchTerm])
 
   return (
-    <div className="min-h-screen bg-ninja-dark text-white">
+    <div className="home-page-container min-h-screen bg-ninja-dark text-white">
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-ninja-purple rounded-lg p-6 border border-blue-500/30">
           <div className="flex items-center gap-3 mb-6">
