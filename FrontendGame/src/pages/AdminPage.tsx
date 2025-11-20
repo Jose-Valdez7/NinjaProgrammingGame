@@ -73,13 +73,6 @@ export default function AdminPage() {
       const metaObj = parsed.meta
       setUsers(Array.isArray(items) ? items : [])
       setMeta(metaObj ?? null)
-      if (!summary) {
-        setSummary({
-          totalUsers: metaObj?.totalItems ?? 0,
-          totalGames: 0,
-          levelsAvailable: 15,
-        })
-      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error cargando usuarios'
       setError(msg)
@@ -273,7 +266,7 @@ export default function AdminPage() {
               <Settings className="text-yellow-400" size={32} />
               <h3 className="text-xl font-semibold">Niveles</h3>
             </div>
-            <div className="text-3xl font-bold text-green-400 mb-2">{summary?.levelsAvailable ?? 15}</div>
+            <div className="text-3xl font-bold text-green-400 mb-2">{summary?.levelsAvailable ?? 20}</div>
             <p className="text-gray-400 text-sm">Niveles disponibles</p>
           </div>
         </div>

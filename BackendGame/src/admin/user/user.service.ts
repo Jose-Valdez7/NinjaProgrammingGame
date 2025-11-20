@@ -61,7 +61,7 @@ export class UserService {
     return {
       totalUsers,
       totalGames,
-      levelsAvailable: 15,
+      levelsAvailable: 20,
     };
   }
 

@@ -143,7 +143,7 @@ export default function HomePage() {
 
   return (
     <div 
-      className="min-h-screen flex items-center justify-center relative"
+      className="home-page-container min-h-screen flex items-center justify-center relative"
       style={{
         backgroundImage: `url(${fondo})`,
         backgroundSize: 'cover',
@@ -166,7 +166,7 @@ export default function HomePage() {
           <div className="relative inline-block">
             <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight" style={{ textShadow: '0 0 28px rgba(34,211,238,0.45), 0 0 52px rgba(244,63,94,0.35)' }}>
               <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-emerald-300 bg-clip-text text-transparent">
-                Descubre tu gen programador
+                Descubre tu GEN programador
               </span>
             </h1>
             {/* Barra de brillo animado sobre el título */}
@@ -262,7 +262,7 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-black/50" />
               <div className="relative">
                 <div className="flex items-center justify-between mb-10">
-                  <h2 className="text-4xl sm:text-5xl font-semibold text-white">15 Niveles de Desafío</h2>
+                  <h2 className="text-4xl sm:text-5xl font-semibold text-white">20 Niveles de Desafío</h2>
                   <button 
                     onClick={() => setShowLevels(false)}
                     className="text-white/80 hover:text-white transition-colors px-6 py-3 rounded-xl text-lg"
@@ -271,13 +271,20 @@ export default function HomePage() {
                   </button>
                 </div>
                 <div className="grid grid-cols-5 gap-6 max-w-4xl mx-auto">
-                  {Array.from({ length: 15 }, (_, i) => {
+                  {Array.from({ length: 20 }, (_, i) => {
                     const levelNum = i + 1
                     // Si no hay progreso (0), solo el nivel 1 está desbloqueado
                     // Si hay progreso, los niveles hasta maxLevelCompleted + 1 están desbloqueados
                     const isUnlocked = maxLevelCompleted === 0 ? levelNum === 1 : levelNum <= maxLevelCompleted + 1
                     const isCompleted = levelNum <= maxLevelCompleted
-                    const difficultyClass = i < 5 ? 'bg-green-600 hover:bg-green-700' : i < 10 ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-red-600 hover:bg-red-700'
+                    let difficultyClass = 'bg-green-600 hover:bg-green-700'
+                    if (levelNum >= 6 && levelNum <= 10) {
+                      difficultyClass = 'bg-yellow-600 hover:bg-yellow-700'
+                    } else if (levelNum >= 11 && levelNum <= 14) {
+                      difficultyClass = 'bg-red-600 hover:bg-red-700'
+                    } else if (levelNum >= 15) {
+                      difficultyClass = 'bg-purple-700 hover:bg-purple-800'
+                    }
                     
                     if (isUnlocked) {
                       return (
@@ -321,7 +328,7 @@ export default function HomePage() {
                   <p className="text-center text-lg text-gray-300 mt-6">Inicia sesión para guardar tu progreso.</p>
                 )}
                 <div className="border-t border-white/10 my-8"></div>
-                <div className="flex justify-center gap-14 mt-10 text-lg sm:text-xl">
+                <div className="flex justify-center gap-8 flex-wrap mt-10 text-lg sm:text-xl">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 bg-green-600 rounded"></div>
                     <span className="text-gray-300">Fácil (1-5)</span>
@@ -332,7 +339,11 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 bg-red-600 rounded"></div>
-                    <span className="text-gray-300">Difícil (11-15)</span>
+                    <span className="text-gray-300">Difícil (11-14)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-purple-700 rounded"></div>
+                    <span className="text-gray-300">Ultimate (15-20)</span>
                   </div>
                 </div>
               </div>
@@ -359,7 +370,7 @@ export default function HomePage() {
               </div>
               <div className="text-gray-200 space-y-3 text-sm sm:text-base">
                 <p>• Presiona “Jugar Ahora” para iniciar la aventura.</p>
-                <p>• Completa los niveles del 1 al 15. La dificultad aumenta progresivamente.</p>
+                <p>• Completa los niveles del 1 al 20. La dificultad aumenta progresivamente.</p>
                 <p>• Observa la historia para aprender pistas y mecánicas del juego.</p>
                 <p>• Revisa el Ranking para comparar tu progreso con otros jugadores.</p>
               </div>

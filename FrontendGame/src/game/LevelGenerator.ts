@@ -95,26 +95,396 @@ export class LevelGenerator {
       energyIndices: [3, 7, 11],
     },
   ]
+  private fixedChallengeLevels: Record<number, {
+    start: { x: number; y: number }
+    door: { x: number; y: number }
+    exactMoves: number
+    energyPositions: { x: number; y: number }[]
+    paths: { x: number; y: number }[][]
+    wrongPaths: { x: number; y: number }[][]
+  }> = {
+    11: {
+      start: { x: 0, y: 0 },
+      door: { x: 9, y: 11 },
+      exactMoves: 8,
+      energyPositions: [
+        { x: 1, y: 1 },
+        { x: 10, y: 3 },
+        { x: 4, y: 9 },
+      ],
+      paths: [
+        // Path 1: D1,B1,D9,B2,I6,B6,D5,B2 (8 comandos - camino complicado con zigzag)
+        [
+          { x: 0, y: 0 },
+          { x: 1, y: 0 },
+          { x: 1, y: 1 }, // Energía 1
+          { x: 2, y: 1 },
+          { x: 3, y: 1 },
+          { x: 4, y: 1 },
+          { x: 5, y: 1 },
+          { x: 6, y: 1 },
+          { x: 7, y: 1 },
+          { x: 8, y: 1 },
+          { x: 9, y: 1 },
+          { x: 10, y: 1 },
+          { x: 10, y: 2 },
+          { x: 10, y: 3 }, // Energía 2
+          { x: 9, y: 3 },
+          { x: 8, y: 3 },
+          { x: 7, y: 3 },
+          { x: 6, y: 3 },
+          { x: 5, y: 3 },
+          { x: 4, y: 3 },
+          { x: 4, y: 4 },
+          { x: 4, y: 5 },
+          { x: 4, y: 6 },
+          { x: 4, y: 7 },
+          { x: 4, y: 8 },
+          { x: 4, y: 9 }, // Energía 3
+          { x: 5, y: 9 },
+          { x: 6, y: 9 },
+          { x: 7, y: 9 },
+          { x: 8, y: 9 },
+          { x: 9, y: 9 },
+          { x: 9, y: 10 }, // B2
+          { x: 9, y: 11 },
+        ],
+        // Path 2: D1,B1,D9,B7,I6,B1,D5,B2 (8 comandos - camino complicado alternativo)
+        [
+          { x: 0, y: 0 },
+          { x: 1, y: 0 },
+          { x: 1, y: 1 }, // Energía 1
+          { x: 2, y: 1 },
+          { x: 3, y: 1 },
+          { x: 4, y: 1 },
+          { x: 5, y: 1 },
+          { x: 6, y: 1 },
+          { x: 7, y: 1 },
+          { x: 8, y: 1 },
+          { x: 9, y: 1 },
+          { x: 10, y: 1 },
+          { x: 10, y: 2 },
+          { x: 10, y: 3 }, // Energía 2
+          { x: 10, y: 4 },
+          { x: 10, y: 5 },
+          { x: 10, y: 6 },
+          { x: 10, y: 7 },
+          { x: 10, y: 8 },
+          { x: 9, y: 8 },
+          { x: 8, y: 8 },
+          { x: 7, y: 8 },
+          { x: 6, y: 8 },
+          { x: 5, y: 8 },
+          { x: 4, y: 8 },
+          { x: 4, y: 9 }, // Energía 3
+          { x: 5, y: 9 },
+          { x: 6, y: 9 },
+          { x: 7, y: 9 },
+          { x: 8, y: 9 },
+          { x: 9, y: 9 },
+          { x: 9, y: 10 }, // B2
+          { x: 9, y: 11 },
+        ],
+      ],
+      wrongPaths: [
+        [
+          { x: 0, y: 2 },
+          { x: 0, y: 3 },
+          { x: 1, y: 3 },
+          { x: 1, y: 4 },
+          { x: 1, y: 5 },
+          { x: 2, y: 5 },
+          { x: 3, y: 5 },
+          { x: 3, y: 6 },
+        ],
+        [
+          { x: 2, y: 0 },
+          { x: 3, y: 0 },
+          { x: 4, y: 0 },
+          { x: 5, y: 0 },
+          { x: 6, y: 0 },
+          { x: 7, y: 0 },
+          { x: 8, y: 0 },
+          { x: 9, y: 0 },
+        ],
+        [
+          { x: 2, y: 7 },
+          { x: 3, y: 7 },
+          { x: 3, y: 8 },
+          { x: 2, y: 8 },
+          { x: 2, y: 9 },
+          { x: 3, y: 9 },
+        ],
+      ],
+    },
+    12: {
+      start: { x: 1, y: 10 },
+      door: { x: 6, y: 1 },
+      exactMoves: 9,
+      energyPositions: [
+        { x: 3, y: 10 },
+        { x: 1, y: 3 },
+        { x: 9, y: 5 },
+      ],
+      paths: [
+        // Path 1: D2,S7,I2,B2,D8,S2,B1,S2,I3,S2 (9 comandos - sin repeticiones consecutivas)
+        [
+          { x: 1, y: 10 },
+          { x: 2, y: 10 },
+          { x: 3, y: 10 }, // Energía 1
+          { x: 3, y: 9 },
+          { x: 3, y: 8 },
+          { x: 3, y: 7 },
+          { x: 3, y: 6 },
+          { x: 3, y: 5 },
+          { x: 3, y: 4 },
+          { x: 3, y: 3 },
+          { x: 2, y: 3 },
+          { x: 1, y: 3 }, // Energía 2
+          { x: 1, y: 4 },
+          { x: 1, y: 5 },
+          { x: 2, y: 5 },
+          { x: 3, y: 5 },
+          { x: 4, y: 5 },
+          { x: 5, y: 5 },
+          { x: 6, y: 5 },
+          { x: 7, y: 5 },
+          { x: 8, y: 5 },
+          { x: 9, y: 5 }, // Energía 3
+          { x: 9, y: 4 },
+          { x: 9, y: 3 },
+          { x: 8, y: 3 },
+          { x: 7, y: 3 },
+          { x: 6, y: 3 },
+          { x: 6, y: 4 },
+          { x: 6, y: 3 },
+          { x: 6, y: 2 },
+          { x: 6, y: 1 },
+        ],
+        // Path 2: D4,S5,I4,S3,D8,S2,I3,S2 (9 comandos - sin repeticiones consecutivas)
+        [
+          { x: 1, y: 10 },
+          { x: 2, y: 10 },
+          { x: 3, y: 10 }, // Energía 1
+          { x: 4, y: 10 },
+          { x: 5, y: 10 },
+          { x: 5, y: 9 },
+          { x: 5, y: 8 },
+          { x: 5, y: 7 },
+          { x: 5, y: 6 },
+          { x: 5, y: 5 },
+          { x: 4, y: 5 },
+          { x: 3, y: 5 },
+          { x: 2, y: 5 },
+          { x: 1, y: 5 },
+          { x: 1, y: 4 },
+          { x: 1, y: 3 }, // Energía 2
+          { x: 1, y: 2 },
+          { x: 2, y: 2 },
+          { x: 3, y: 2 },
+          { x: 4, y: 2 },
+          { x: 5, y: 2 },
+          { x: 6, y: 2 },
+          { x: 7, y: 2 },
+          { x: 8, y: 2 },
+          { x: 9, y: 2 },
+          { x: 9, y: 3 },
+          { x: 9, y: 4 },
+          { x: 9, y: 5 }, // Energía 3
+          { x: 9, y: 4 },
+          { x: 9, y: 3 },
+          { x: 8, y: 3 },
+          { x: 7, y: 3 },
+          { x: 6, y: 3 },
+          { x: 6, y: 2 },
+          { x: 6, y: 1 },
+        ],
+      ],
+      wrongPaths: [
+        [
+          { x: 2, y: 9 },
+          { x: 3, y: 9 },
+          { x: 4, y: 9 },
+          { x: 4, y: 8 },
+          { x: 4, y: 7 },
+          { x: 3, y: 7 },
+          { x: 2, y: 7 },
+        ],
+        [
+          { x: 0, y: 10 },
+          { x: 0, y: 9 },
+          { x: 0, y: 8 },
+          { x: 0, y: 7 },
+          { x: 0, y: 6 },
+          { x: 0, y: 5 },
+        ],
+        [
+          { x: 2, y: 4 },
+          { x: 2, y: 3 },
+          { x: 2, y: 2 },
+          { x: 2, y: 1 },
+          { x: 2, y: 0 },
+        ],
+      ],
+    },
+    13: {
+      start: { x: 0, y: 11 },
+      door: { x: 9, y: 0 },
+      exactMoves: 10,
+      energyPositions: [
+        { x: 6, y: 10 },
+        { x: 11, y: 6 },
+        { x: 0, y: 3 },
+      ],
+      paths: [
+        // Path 1: D6,S1,D5,S4,I11,S3,D9,S3 (8 comandos) -> necesita 10
+        // Agregando pasos: D6,S1,D5,S4,I11,S3,D4,S1,D5,S3 (10 comandos)
+        [
+          { x: 0, y: 11 },
+          { x: 1, y: 11 },
+          { x: 2, y: 11 },
+          { x: 3, y: 11 },
+          { x: 4, y: 11 },
+          { x: 5, y: 11 },
+          { x: 6, y: 11 },
+          { x: 6, y: 10 }, // Energía 1
+          { x: 7, y: 10 },
+          { x: 8, y: 10 },
+          { x: 9, y: 10 },
+          { x: 10, y: 10 },
+          { x: 11, y: 10 },
+          { x: 11, y: 9 },
+          { x: 11, y: 8 },
+          { x: 11, y: 7 },
+          { x: 11, y: 6 }, // Energía 2
+          { x: 10, y: 6 },
+          { x: 9, y: 6 },
+          { x: 8, y: 6 },
+          { x: 7, y: 6 },
+          { x: 6, y: 6 },
+          { x: 5, y: 6 },
+          { x: 4, y: 6 },
+          { x: 3, y: 6 },
+          { x: 2, y: 6 },
+          { x: 1, y: 6 },
+          { x: 0, y: 6 },
+          { x: 0, y: 5 },
+          { x: 0, y: 4 },
+          { x: 0, y: 3 }, // Energía 3
+          { x: 1, y: 3 },
+          { x: 2, y: 3 },
+          { x: 3, y: 3 },
+          { x: 4, y: 3 },
+          { x: 4, y: 2 },
+          { x: 5, y: 2 },
+          { x: 6, y: 2 },
+          { x: 7, y: 2 },
+          { x: 8, y: 2 },
+          { x: 9, y: 2 },
+          { x: 9, y: 1 },
+          { x: 9, y: 0 },
+        ],
+        // Path 2: S8,D6,B7,I11,S3,D4,S1,D5,S3 (10 comandos - sin repeticiones consecutivas)
+        [
+          { x: 0, y: 11 },
+          { x: 0, y: 10 },
+          { x: 0, y: 9 },
+          { x: 0, y: 8 },
+          { x: 0, y: 7 },
+          { x: 0, y: 6 },
+          { x: 0, y: 5 },
+          { x: 0, y: 4 },
+          { x: 0, y: 3 }, // Energía 3
+          { x: 1, y: 3 },
+          { x: 2, y: 3 },
+          { x: 3, y: 3 },
+          { x: 4, y: 3 },
+          { x: 5, y: 3 },
+          { x: 6, y: 3 },
+          { x: 6, y: 4 },
+          { x: 6, y: 5 },
+          { x: 6, y: 6 },
+          { x: 6, y: 7 },
+          { x: 6, y: 8 },
+          { x: 6, y: 9 },
+          { x: 6, y: 10 }, // Energía 1
+          { x: 7, y: 10 },
+          { x: 8, y: 10 },
+          { x: 9, y: 10 },
+          { x: 10, y: 10 },
+          { x: 11, y: 10 },
+          { x: 11, y: 9 },
+          { x: 11, y: 8 },
+          { x: 11, y: 7 },
+          { x: 11, y: 6 }, // Energía 2
+          { x: 10, y: 6 },
+          { x: 9, y: 6 },
+          { x: 9, y: 5 },
+          { x: 9, y: 4 },
+          { x: 9, y: 3 },
+          { x: 9, y: 2 },
+          { x: 8, y: 2 },
+          { x: 9, y: 2 },
+          { x: 9, y: 1 },
+          { x: 9, y: 0 },
+        ],
+      ],
+      wrongPaths: [
+        [
+          { x: 1, y: 11 },
+          { x: 2, y: 10 },
+          { x: 3, y: 9 },
+          { x: 4, y: 8 },
+          { x: 5, y: 7 },
+          { x: 6, y: 6 },
+        ],
+        [
+          { x: 11, y: 11 },
+          { x: 11, y: 10 },
+          { x: 11, y: 9 },
+          { x: 10, y: 8 },
+          { x: 9, y: 7 },
+          { x: 8, y: 6 },
+        ],
+        [
+          { x: 0, y: 2 },
+          { x: 1, y: 2 },
+          { x: 2, y: 2 },
+          { x: 3, y: 2 },
+          { x: 3, y: 1 },
+          { x: 3, y: 0 },
+        ],
+      ],
+    },
+  }
 
   private advancedPatternAssignments = new Map<number, PatternTemplate>()
   private remainingAdvancedPatterns: PatternTemplate[] = []
 
   public generateLevel(levelNumber: number): GameLevel {
     const grid = this.createEmptyGrid()
-    const hasGuideLines = levelNumber <= 8 || (levelNumber >= 11 && levelNumber <= 14)
-    const allowsLoops = levelNumber >= 11
+    const hasGuideLines =
+      levelNumber <= 8 ||
+      levelNumber === 11 ||
+      levelNumber === 12 ||
+      levelNumber >= 14 && levelNumber <= 17
+    const allowsLoops = levelNumber >= 14
     let timeLimit: number | undefined
     if (levelNumber >= 7 && levelNumber <= 8) {
       timeLimit = 120
-    } else if (levelNumber >= 9 && levelNumber <= 10) {
+    } else if (levelNumber >= 9 && levelNumber <= 13) {
       timeLimit = 180
     }
 
     const requiredEnergy = this.computeRequiredEnergy(levelNumber)
-    const { startPosition, doorPosition, energyPositions } =
-      levelNumber >= 11
+    const layout =
+      levelNumber >= 14
         ? this.generatePatternLevel(levelNumber, grid, requiredEnergy)
+        : levelNumber >= 11 && levelNumber <= 13
+          ? this.generateFixedChallengeLevel(levelNumber, grid, requiredEnergy)
         : this.generateNormalLevelLayout(levelNumber, grid, requiredEnergy)
+
+    const { startPosition, doorPosition, energyPositions, exactMoveCount } = layout
 
     return {
       level: levelNumber,
@@ -125,8 +495,170 @@ export class LevelGenerator {
       requiredEnergy,
       timeLimit,
       hasGuideLines,
-      allowsLoops
+      allowsLoops,
+      exactMoveCount,
     }
+  }
+
+  private generateFixedChallengeLevel(levelNumber: number, grid: Cell[][], requiredEnergy: number) {
+    const config = this.fixedChallengeLevels[levelNumber]
+    if (!config) {
+      return this.generateNormalLevelLayout(levelNumber, grid, requiredEnergy)
+    }
+
+    // Inicializar grid: algunos espacios como SAFE, otros como VOID para hacer el nivel menos obvio
+    const pathKeys = new Set<string>()
+    config.paths.forEach(path => {
+      path.forEach(pos => {
+        pathKeys.add(this.positionKey(pos))
+      })
+    })
+
+    // Porcentaje de espacios SAFE según el nivel (más SAFE = menos obvio)
+    const safePercentage = levelNumber === 11 ? 0.4 : levelNumber === 12 ? 0.45 : 0.5
+
+    for (let y = 0; y < this.gridSize; y++) {
+      for (let x = 0; x < this.gridSize; x++) {
+        const cell = grid[y][x]
+        const key = this.positionKey({ x, y })
+        // Si está en un camino correcto, será SAFE (se marcará después)
+        // Si no, hay un porcentaje de probabilidad de que sea SAFE (para hacer menos obvio)
+        if (!pathKeys.has(key)) {
+          cell.type = Math.random() < safePercentage ? CellType.SAFE : CellType.VOID
+        } else {
+          cell.type = CellType.VOID // Se cambiará a SAFE después
+        }
+        cell.isPath = false
+      }
+    }
+
+    // Asegurar que la posición solicitada sea SAFE en el nivel 11
+    if (levelNumber === 11) {
+      const ensureSafe = (x: number, y: number) => {
+        const cell = grid[y]?.[x]
+        if (cell) {
+          cell.type = CellType.SAFE
+          cell.isPath = false
+        }
+      }
+      ensureSafe(0, 1)
+      ensureSafe(2, 0)
+    }
+
+    if (levelNumber === 12) {
+      const ensureSafe = (x: number, y: number) => {
+        const cell = grid[y]?.[x]
+        if (cell) {
+          cell.type = CellType.SAFE
+          cell.isPath = false
+        }
+      }
+      ensureSafe(1, 9)
+      ensureSafe(2, 9)
+    }
+
+    if (levelNumber === 13) {
+      const ensureSafe = (x: number, y: number) => {
+        const cell = grid[y]?.[x]
+        if (cell) {
+          cell.type = CellType.SAFE
+          cell.isPath = false
+        }
+      }
+      ensureSafe(1, 10)
+      ensureSafe(2, 10)
+      ensureSafe(3, 10)
+      ensureSafe(4, 10)
+      ensureSafe(5, 10)
+      ensureSafe(5, 9)
+      ensureSafe(5, 9)
+      ensureSafe(10, 0)
+      ensureSafe(10, 1)
+      ensureSafe(10, 2)
+    }
+
+    const isInsideGrid = (pos: { x: number; y: number }) =>
+      pos.x >= 0 && pos.y >= 0 && pos.x < this.gridSize && pos.y < this.gridSize
+
+    config.paths.forEach(path => {
+      path.forEach(pos => {
+        if (!isInsideGrid(pos)) return
+        const cell = grid[pos.y]?.[pos.x]
+        if (cell) {
+          cell.type = CellType.SAFE
+          cell.isPath = true
+        }
+      })
+    })
+
+    const startPosition = { ...config.start }
+    if (isInsideGrid(startPosition)) {
+      const startCell = grid[startPosition.y]?.[startPosition.x]
+      if (startCell) {
+        startCell.type = CellType.SAFE
+        startCell.isPath = true
+      }
+    }
+
+    const energyPositions: { x: number; y: number }[] = []
+    config.energyPositions.forEach(pos => {
+      if (!isInsideGrid(pos)) return
+      const cell = grid[pos.y]?.[pos.x]
+      if (cell) {
+        cell.type = CellType.ENERGY
+        cell.isPath = true
+        energyPositions.push({ ...pos })
+      }
+    })
+
+    const doorPosition = this.markDoorArea(grid, config.door)
+    const doorCell = grid[doorPosition.y]?.[doorPosition.x]
+    if (doorCell) {
+      doorCell.isPath = true
+    }
+
+    if (config.wrongPaths?.length) {
+      config.wrongPaths.forEach((path, pathIdx) => {
+        path.forEach((pos, stepIdx) => {
+          if (!isInsideGrid(pos)) return
+          const cell = grid[pos.y]?.[pos.x]
+          if (!cell) return
+          if (cell.type === CellType.SAFE || cell.type === CellType.ENERGY || cell.type === CellType.DOOR) {
+            return
+          }
+          const hazardType = (pathIdx + stepIdx) % 2 === 0 ? CellType.SNAKE : CellType.VOID
+          cell.type = hazardType
+          cell.isPath = false
+        })
+      })
+    }
+
+    if (energyPositions.length < requiredEnergy) {
+      const filledKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
+      const avoidKeys = new Set([
+        this.positionKey(startPosition),
+        this.positionKey(doorPosition),
+      ])
+
+      for (const path of config.paths) {
+        for (const pos of path) {
+          if (energyPositions.length >= requiredEnergy) break
+          if (!isInsideGrid(pos)) continue
+          const key = this.positionKey(pos)
+          if (filledKeys.has(key) || avoidKeys.has(key)) continue
+          const cell = grid[pos.y]?.[pos.x]
+          if (cell && cell.type === CellType.SAFE) {
+            cell.type = CellType.ENERGY
+            energyPositions.push({ ...pos })
+            filledKeys.add(key)
+          }
+        }
+      }
+    }
+
+    this.ensureStartAccessibility(grid, startPosition)
+
+    return { startPosition, doorPosition, energyPositions, exactMoveCount: config.exactMoves }
   }
 
   private computeRequiredEnergy(levelNumber: number): number {
@@ -141,6 +673,9 @@ export class LevelGenerator {
       8: 2,
       9: 1,
       10: 2,
+      11: 3,
+      12: 3,
+      13: 3,
     }
 
     if (Object.prototype.hasOwnProperty.call(specificEnergyByLevel, levelNumber)) {
@@ -187,9 +722,15 @@ export class LevelGenerator {
     const pathKeys = new Set(path.map(pos => this.positionKey(pos)))
     const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
 
-    // Para el nivel 15, agregar obstáculos estratégicos para bloquear rutas alternativas
-    if (levelNumber === 15) {
-      this.blockAlternativeRoutesLevel15(grid, path, pathKeys, startPosition, doorPosition, energyPositions)
+    // Para los niveles 18, 19 y 20, agregar obstáculos estratégicos para bloquear rutas alternativas
+    if (levelNumber === 18) {
+      this.blockAlternativeRoutesLevel18(grid, path, pathKeys, startPosition, doorPosition, energyPositions)
+    }
+    if (levelNumber === 19) {
+      this.blockAlternativeRoutesLevel19(grid, path, pathKeys, startPosition, doorPosition, energyPositions)
+    }
+    if (levelNumber === 20) {
+      this.blockAlternativeRoutesLevel20(grid, path, pathKeys, startPosition, doorPosition, energyPositions)
     }
 
     const obstacleCount = Math.max(5, Math.floor(levelNumber * 1.5))
@@ -295,7 +836,7 @@ export class LevelGenerator {
 
     this.ensureStartAccessibility(grid, startPosition)
 
-    return { startPosition, doorPosition: normalizedDoorPosition, energyPositions }
+    return { startPosition, doorPosition: normalizedDoorPosition, energyPositions, exactMoveCount: undefined }
   }
 
   private generatePatternLevel(levelNumber: number, grid: Cell[][], requiredEnergy: number) {
@@ -309,14 +850,22 @@ export class LevelGenerator {
     const startPosition = { ...path[0] }
     let originalDoorPosition = { ...path[path.length - 1] }
     
-    // Para el nivel 15, colocar el portal al final del path completo (después de las 4 repeticiones)
-    if (levelNumber === 15) {
-      // El portal debe estar al final del path completo (índice 32 = última posición)
-      // Que corresponde a (5,4) después de completar las 4 repeticiones
+    // Para los niveles 18, 19 y 20, colocar el portal al final del path completo
+    if (levelNumber === 18 || levelNumber === 19 || levelNumber === 20) {
+      // El portal debe estar al final del path completo
       if (path.length > 0) {
         originalDoorPosition = { ...path[path.length - 1] }
       } else {
-        originalDoorPosition = { x: 5, y: 4 }
+        // Fallback para nivel 18
+        if (levelNumber === 18) {
+          originalDoorPosition = { x: 5, y: 4 }
+        } else if (levelNumber === 19) {
+          // Fallback para nivel 19
+          originalDoorPosition = { x: 5, y: 1 }
+        } else {
+          // Fallback para nivel 20
+          originalDoorPosition = { x: 5, y: 0 }
+        }
       }
     } else {
       // Para otros niveles, asegurar que el portal no esté en ninguna celda intermedia del path
@@ -403,15 +952,55 @@ export class LevelGenerator {
 
     this.ensureStartAccessibility(grid, startPosition)
 
-    return { startPosition, doorPosition, energyPositions }
+    return { startPosition, doorPosition, energyPositions, exactMoveCount: undefined }
   }
 
   private selectPatternTemplate(levelNumber: number): PatternTemplate {
     const findByName = (name: string) => this.patternTemplates.find(template => template.name === name)
 
-    if (levelNumber === 15) {
+    if (levelNumber === 20) {
+      // Patrón: (d2,s3,i3,d2)x3 desde (3,9)
+      // Path completo: 31 posiciones (0-30)
+      // Portal final: (6,0)
       return {
-        name: 'level15-specific',
+        name: 'level20-specific',
+        start: { x: 3, y: 9 },
+        pattern: [
+          { direction: 'D', steps: 2 },
+          { direction: 'S', steps: 3 },
+          { direction: 'I', steps: 3 },
+          { direction: 'D', steps: 2 },
+        ],
+        repetitions: 3,
+        energyIndices: [6, 18, 24],
+      }
+    }
+
+    if (levelNumber === 19) {
+      // Patrón: (i2,s2,d2,s1,i1)x3 desde (10,11)
+      // Path completo: 25 posiciones (0-24)
+      // Rep 1: 8 pasos -> termina en (9,8) - índice 8
+      // Rep 2: 8 pasos -> termina en (8,5) - índice 16
+      // Rep 3: 8 pasos -> termina en (7,2) - índice 24 (portal)
+      // Energías distribuidas: índice 4=(8,9), índice 9=(8,8), índice 13=(8,6)
+      return {
+        name: 'level19-specific',
+        start: { x: 10, y: 11 },
+        pattern: [
+          { direction: 'I', steps: 2 },
+          { direction: 'S', steps: 2 },
+          { direction: 'D', steps: 2 },
+          { direction: 'S', steps: 1 },
+          { direction: 'I', steps: 1 },
+        ],
+        repetitions: 3,
+        energyIndices: [4, 14, 22],
+      }
+    }
+
+    if (levelNumber === 18) {
+      return {
+        name: 'level18-specific',
         start: { x: 1, y: 8 },
         pattern: [
           { direction: 'D', steps: 3 },
@@ -424,23 +1013,23 @@ export class LevelGenerator {
       }
     }
 
-    if (levelNumber === 14) {
+    if (levelNumber === 17) {
       return findByName('triangle') ?? this.patternTemplates[0]
     }
 
-    if (levelNumber === 13) {
+    if (levelNumber === 16) {
       return findByName('ladder') ?? this.patternTemplates[0]
     }
 
-    if (levelNumber >= 11 && levelNumber <= 13) {
+    if (levelNumber >= 14 && levelNumber <= 15) {
       const assigned = this.advancedPatternAssignments.get(levelNumber)
       if (assigned) {
         return assigned
       }
 
-      if (this.remainingAdvancedPatterns.length === 0 || levelNumber === 13) {
+      if (this.remainingAdvancedPatterns.length === 0 || levelNumber === 15) {
         this.remainingAdvancedPatterns = this.patternTemplates.filter(template => {
-          if (levelNumber <= 12) {
+          if (levelNumber <= 15) {
             return template.name !== 'wide-wave' && template.name !== 'triangle' && template.name !== 'ladder'
           }
           return template.name !== 'wide-wave' && template.name !== 'triangle'
@@ -725,7 +1314,7 @@ export class LevelGenerator {
     return count
   }
 
-  private blockAlternativeRoutesLevel15(
+  private blockAlternativeRoutesLevel18(
     grid: Cell[][],
     path: { x: number; y: number }[],
     pathKeys: Set<string>,
@@ -733,7 +1322,7 @@ export class LevelGenerator {
     doorPosition: { x: number; y: number },
     energyPositions: { x: number; y: number }[]
   ): void {
-    // Bloquear rutas alternativas para el patrón del nivel 15
+    // Bloquear rutas alternativas para el patrón del nivel 18
     // El patrón es: (d3,s2,i1,b1)x5
     // Necesitamos bloquear rutas que permitan otros patrones alternativos
     // Bloquear agresivamente como antes
@@ -851,6 +1440,234 @@ export class LevelGenerator {
     })
   }
 
+  private blockAlternativeRoutesLevel19(
+    grid: Cell[][],
+    path: { x: number; y: number }[],
+    pathKeys: Set<string>,
+    startPosition: { x: number; y: number },
+    doorPosition: { x: number; y: number },
+    energyPositions: { x: number; y: number }[]
+  ): void {
+    // Bloquear rutas alternativas para el patrón del nivel 19
+    // El patrón es: (d4,s2,i2,b2)x5
+    const startKey = this.positionKey(startPosition)
+    const doorKey = this.positionKey(doorPosition)
+    const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
+
+    const obstaclesToPlace: Array<{ x: number; y: number; type: CellType }> = []
+
+    // Bloquear celdas adyacentes al path que permitirían rutas alternativas
+    path.forEach((pos, index) => {
+      const key = this.positionKey(pos)
+      if (key === startKey || key === doorKey || energyKeys.has(key)) {
+        return
+      }
+
+      const adjacent = [
+        { x: pos.x + 1, y: pos.y },
+        { x: pos.x - 1, y: pos.y },
+        { x: pos.x, y: pos.y + 1 },
+        { x: pos.x, y: pos.y - 1 },
+      ]
+
+      adjacent.forEach((adj, adjIndex) => {
+        if (adj.x < 0 || adj.x >= this.gridSize || adj.y < 0 || adj.y >= this.gridSize) {
+          return
+        }
+
+        const adjKey = this.positionKey(adj)
+        if (pathKeys.has(adjKey)) {
+          return
+        }
+
+        const cell = grid[adj.y]?.[adj.x]
+        if (cell && cell.type === CellType.SAFE) {
+          // Bloquear agresivamente cerca del inicio
+          if (index < 10) {
+            const obstacleType = (index + adjIndex) % 2 === 0 ? CellType.VOID : CellType.SNAKE
+            obstaclesToPlace.push({ x: adj.x, y: adj.y, type: obstacleType })
+          } else {
+            const isCloseToPath = path.some(p => {
+              const dist = Math.abs(p.x - adj.x) + Math.abs(p.y - adj.y)
+              return dist <= 1 && p !== pos
+            })
+            if (isCloseToPath) {
+              obstaclesToPlace.push({ x: adj.x, y: adj.y, type: CellType.VOID })
+            }
+          }
+        }
+      })
+    })
+
+    // Bloquear celdas arriba del inicio
+    for (let i = 1; i <= 3; i++) {
+      const aboveStart = { x: startPosition.x, y: startPosition.y - i }
+      if (aboveStart.y >= 0) {
+        const key = this.positionKey(aboveStart)
+        if (!pathKeys.has(key)) {
+          const cell = grid[aboveStart.y]?.[aboveStart.x]
+          if (cell && cell.type === CellType.SAFE) {
+            obstaclesToPlace.push({ x: aboveStart.x, y: aboveStart.y, type: CellType.VOID })
+          }
+        }
+      }
+    }
+
+    // Bloquear celdas que permitirían patrones alternativos desde posiciones tempranas del path
+    path.slice(0, 18).forEach((pos) => {
+      const rightOfPath = { x: pos.x + 1, y: pos.y }
+      if (rightOfPath.x < this.gridSize) {
+        const rightKey = this.positionKey(rightOfPath)
+        if (!pathKeys.has(rightKey)) {
+          const cell = grid[rightOfPath.y]?.[rightOfPath.x]
+          if (cell && cell.type === CellType.SAFE) {
+            obstaclesToPlace.push({ x: rightOfPath.x, y: rightOfPath.y, type: CellType.VOID })
+          }
+        } else {
+          for (let i = 1; i <= 2; i++) {
+            const aboveRight = { x: rightOfPath.x, y: rightOfPath.y - i }
+            if (aboveRight.y >= 0) {
+              const aboveKey = this.positionKey(aboveRight)
+              if (!pathKeys.has(aboveKey)) {
+                const cell = grid[aboveRight.y]?.[aboveRight.x]
+                if (cell && cell.type === CellType.SAFE) {
+                  obstaclesToPlace.push({ x: aboveRight.x, y: aboveRight.y, type: CellType.VOID })
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    // Aplicar los obstáculos (evitar duplicados)
+    const placedKeys = new Set<string>()
+    obstaclesToPlace.forEach(obstacle => {
+      const key = this.positionKey(obstacle)
+      if (!placedKeys.has(key) && !pathKeys.has(key) && key !== startKey && key !== doorKey && !energyKeys.has(key)) {
+        const cell = grid[obstacle.y]?.[obstacle.x]
+        if (cell && cell.type === CellType.SAFE) {
+          cell.type = obstacle.type
+          placedKeys.add(key)
+        }
+      }
+    })
+  }
+
+  private blockAlternativeRoutesLevel20(
+    grid: Cell[][],
+    path: { x: number; y: number }[],
+    pathKeys: Set<string>,
+    startPosition: { x: number; y: number },
+    doorPosition: { x: number; y: number },
+    energyPositions: { x: number; y: number }[]
+  ): void {
+    // Bloquear rutas alternativas para el patrón del nivel 20
+    // El patrón es: (d2,s3,i3,s2,d2)x3
+    const startKey = this.positionKey(startPosition)
+    const doorKey = this.positionKey(doorPosition)
+    const energyKeys = new Set(energyPositions.map(pos => this.positionKey(pos)))
+
+    const obstaclesToPlace: Array<{ x: number; y: number; type: CellType }> = []
+
+    // Bloquear celdas adyacentes al path que permitirían rutas alternativas
+    path.forEach((pos, index) => {
+      const key = this.positionKey(pos)
+      if (key === startKey || key === doorKey || energyKeys.has(key)) {
+        return
+      }
+
+      const adjacent = [
+        { x: pos.x + 1, y: pos.y },
+        { x: pos.x - 1, y: pos.y },
+        { x: pos.x, y: pos.y + 1 },
+        { x: pos.x, y: pos.y - 1 },
+      ]
+
+      adjacent.forEach((adj, adjIndex) => {
+        if (adj.x < 0 || adj.x >= this.gridSize || adj.y < 0 || adj.y >= this.gridSize) {
+          return
+        }
+
+        const adjKey = this.positionKey(adj)
+        if (pathKeys.has(adjKey)) {
+          return
+        }
+
+        const cell = grid[adj.y]?.[adj.x]
+        if (cell && cell.type === CellType.SAFE) {
+          // Bloquear agresivamente cerca del inicio
+          if (index < 12) {
+            const obstacleType = (index + adjIndex) % 2 === 0 ? CellType.VOID : CellType.SNAKE
+            obstaclesToPlace.push({ x: adj.x, y: adj.y, type: obstacleType })
+          } else {
+            const isCloseToPath = path.some(p => {
+              const dist = Math.abs(p.x - adj.x) + Math.abs(p.y - adj.y)
+              return dist <= 1 && p !== pos
+            })
+            if (isCloseToPath) {
+              obstaclesToPlace.push({ x: adj.x, y: adj.y, type: CellType.VOID })
+            }
+          }
+        }
+      })
+    })
+
+    // Bloquear celdas arriba del inicio
+    for (let i = 1; i <= 3; i++) {
+      const aboveStart = { x: startPosition.x, y: startPosition.y - i }
+      if (aboveStart.y >= 0) {
+        const key = this.positionKey(aboveStart)
+        if (!pathKeys.has(key)) {
+          const cell = grid[aboveStart.y]?.[aboveStart.x]
+          if (cell && cell.type === CellType.SAFE) {
+            obstaclesToPlace.push({ x: aboveStart.x, y: aboveStart.y, type: CellType.VOID })
+          }
+        }
+      }
+    }
+
+    // Bloquear celdas que permitirían patrones alternativos desde posiciones tempranas del path
+    path.slice(0, 20).forEach((pos) => {
+      const rightOfPath = { x: pos.x + 1, y: pos.y }
+      if (rightOfPath.x < this.gridSize) {
+        const rightKey = this.positionKey(rightOfPath)
+        if (!pathKeys.has(rightKey)) {
+          const cell = grid[rightOfPath.y]?.[rightOfPath.x]
+          if (cell && cell.type === CellType.SAFE) {
+            obstaclesToPlace.push({ x: rightOfPath.x, y: rightOfPath.y, type: CellType.VOID })
+          }
+        } else {
+          for (let i = 1; i <= 2; i++) {
+            const aboveRight = { x: rightOfPath.x, y: rightOfPath.y - i }
+            if (aboveRight.y >= 0) {
+              const aboveKey = this.positionKey(aboveRight)
+              if (!pathKeys.has(aboveKey)) {
+                const cell = grid[aboveRight.y]?.[aboveRight.x]
+                if (cell && cell.type === CellType.SAFE) {
+                  obstaclesToPlace.push({ x: aboveRight.x, y: aboveRight.y, type: CellType.VOID })
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    // Aplicar los obstáculos (evitar duplicados)
+    const placedKeys = new Set<string>()
+    obstaclesToPlace.forEach(obstacle => {
+      const key = this.positionKey(obstacle)
+      if (!placedKeys.has(key) && !pathKeys.has(key) && key !== startKey && key !== doorKey && !energyKeys.has(key)) {
+        const cell = grid[obstacle.y]?.[obstacle.x]
+        if (cell && cell.type === CellType.SAFE) {
+          cell.type = obstacle.type
+          placedKeys.add(key)
+        }
+      }
+    })
+  }
+
   private generateGuidePath(
     grid: Cell[][],
     startPosition: { x: number; y: number },
@@ -897,7 +1714,7 @@ export class LevelGenerator {
   public generatePredefinedLevels(): GameLevel[] {
     const levels: GameLevel[] = []
     
-    for (let i = 1; i <= 15; i++) {
+    for (let i = 1; i <= 20; i++) {
       levels.push(this.generateLevel(i))
     }
 

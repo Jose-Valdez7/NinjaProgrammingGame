@@ -106,7 +106,7 @@ export class UserProgressService {
       return;
     }
 
-    const nextScore = Math.max(0, Math.min(150, user.score + delta));
+    const nextScore = Math.max(0, Math.min(200, user.score + delta));
 
     await this.prisma.user.update({
       where: { id: userId },

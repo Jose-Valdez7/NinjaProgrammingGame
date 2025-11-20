@@ -293,11 +293,11 @@ export default function GamePage() {
 
     if (levelNumber >= 7 && levelNumber <= 8) {
       nextTimerMode = 'countdown'
-      countdownLimit = 120
-    } else if (levelNumber >= 9 && levelNumber <= 10) {
+      countdownLimit = 70
+    } else if (levelNumber >= 9 && levelNumber <= 13) {
       nextTimerMode = 'countdown'
-      countdownLimit = 180
-    } else if (levelNumber >= 11) {
+      countdownLimit = 90
+    } else if (levelNumber >= 14) {
       nextTimerMode = 'countup'
     }
 
@@ -338,7 +338,11 @@ export default function GamePage() {
       setIntroMessage('¡Atención! En los siguientes niveles las líneas guía desaparecen.')
       setShowIntroModal(true)
     } else if (levelNumber === 11) {
-      setIntroTitle('Nivel 11: ¡Bucles!')
+      setIntroTitle('Nivel 11: Retos de Precisión')
+      setIntroMessage('')
+      setShowIntroModal(true)
+    } else if (levelNumber === 14) {
+      setIntroTitle('Nivel 14: ¡Bucles!')
       setIntroMessage('¡Ahora puedes usar bucles! Repite secuencias de comandos con (comandos)xN')
       setShowIntroModal(true)
     } else {
@@ -359,12 +363,22 @@ export default function GamePage() {
           return
         }
 
-        if (currentLevel >= 14) {
-          if (currentLevel === 14) {
-            setPendingLevelAfterCelebration(currentLevel + 1)
-          } else {
-            setPendingLevelAfterCelebration(null)
-          }
+        if (currentLevel === 14) {
+          // El nivel 14 avanza directamente al 15 sin mostrar modal
+          void loadLevel(currentLevel + 1)
+          return
+        }
+
+        if (currentLevel === 19) {
+          // Modal verde del nivel 14 ahora para el nivel 19, con botón para continuar al 20
+          setPendingLevelAfterCelebration(20)
+          setShowFinalCelebration(true)
+          return
+        }
+
+        if (currentLevel === 20) {
+          // Modal amarillo del nivel 15 ahora para el nivel 20
+          setPendingLevelAfterCelebration(null)
           setShowFinalCelebration(true)
           return
         }
@@ -411,7 +425,7 @@ export default function GamePage() {
     // Solo cargar automáticamente si no se ha cargado ningún nivel para este usuario
     // Esto permite que el usuario navegue manualmente sin que se sobrescriba
     if (!hasLoadedUserProgressRef.current && !manualLevelSelectionRef.current) {
-      const expectedLevel = maxLevelCompleted >= 15 ? 15 : (maxLevelCompleted > 0 ? Math.min(maxLevelCompleted + 1, 15) : 1)
+      const expectedLevel = maxLevelCompleted >= 20 ? 20 : (maxLevelCompleted > 0 ? Math.min(maxLevelCompleted + 1, 20) : 1)
       hasLoadedUserProgressRef.current = true
       void loadLevel(expectedLevel)
     }
@@ -483,8 +497,8 @@ export default function GamePage() {
         setIsPlaying(false)
         setError('Tiempo límite sobrepasado. ¡Vuelve a intentarlo!')
         
-        // Mostrar overlay de derrota para niveles 7-10
-        if (currentLevel >= 7 && currentLevel <= 10) {
+        // Mostrar overlay de derrota para niveles 7-13
+        if (currentLevel >= 7 && currentLevel <= 13) {
           gameEngineRef.current?.showNotification('TIEMPO LIMITE \n AGOTADO', 0xff4444, 'defeat')
         } else {
           await resetLevel()
@@ -496,20 +510,30 @@ export default function GamePage() {
 
   // 🧩 Validar y preparar comandos
   const prepareCommands = () => {
-    const parser = commandParserRef.current
     const trimmed = commands.trim()
-    const requireComma = Boolean(level && level.level >= 4)
+    if (!trimmed || !level) {
+      return { expanded: [], commandCount: 0, moveCount: 0 }
+    }
+
+    const parser = commandParserRef.current
+    const requireComma = level.level >= 4
+    const currentLevelNum = level.level
     const validation = parser.validateCommands(trimmed, {
       requireCommaAfterCommand: requireComma,
+      level: currentLevelNum,
+      startPosition: level.startPosition,
+      doorPosition: level.doorPosition,
     })
     if (!validation.isValid) throw new Error(validation.error || 'Comando incorrecto.')
     const parsed = parser.parseCommands(trimmed, {
       requireCommaAfterCommand: requireComma,
+      level: currentLevelNum,
     })
     const expanded = parser.expandCommands(parsed)
-    const commandCount = level && level.level >= 11 ? parsed.length : 0
+    const commandCount = level.level >= 14 ? parsed.length : 0
+    const moveCount = parsed.length
 
-    return { expanded, commandCount }
+    return { expanded, commandCount, moveCount }
   }
 
   const postProgress = useCallback(async (payload: {
@@ -574,11 +598,35 @@ export default function GamePage() {
 
     const parser = commandParserRef.current
     const parsed = parser.parseCommands(trimmed)
-    setMovesCount(parsed.length)
     const expanded = parser.expandCommands(parsed)
+    setMovesCount(parsed.length)
 
     engine.previewGuideForCommands(expanded)
   }, [commands, level])
+
+  // Actualizar conteo de comandos para nivel 13 (sin guías)
+  useEffect(() => {
+    const currentLevelData = level as GameLevel | null
+    if (!currentLevelData || currentLevel !== 13) return
+
+    const trimmed = commands.trim()
+    if (!trimmed) {
+      setMovesCount(0)
+      return
+    }
+
+    try {
+      const parser = commandParserRef.current
+      const requireComma = currentLevel >= 4
+      const parsed = parser.parseCommands(trimmed, {
+        requireCommaAfterCommand: requireComma,
+        level: currentLevel,
+      })
+      setMovesCount(parsed.length)
+    } catch {
+      // Si hay error de parsing, no actualizar el contador
+    }
+  }, [commands, level, currentLevel])
 
   // ⚡ Ejecutar comandos
   const handleEnergyVideoClose = useCallback(() => {
@@ -589,6 +637,20 @@ export default function GamePage() {
       resolve()
     }
   }, [])
+
+  const handleDefeatOverlayComplete = useCallback(() => {
+    gameEngineRef.current?.showNotification('GAME OVER', 0xff4444, 'defeat')
+  }, [])
+
+  const handleSnakeGameOverClose = useCallback(() => {
+    setShowSnakeGameOver(false)
+    handleDefeatOverlayComplete()
+  }, [handleDefeatOverlayComplete])
+
+  const handleVoidGameOverClose = useCallback(() => {
+    setShowVoidGameOver(false)
+    handleDefeatOverlayComplete()
+  }, [handleDefeatOverlayComplete])
 
   const triggerEnergyCutscene = useCallback(() => {
     if (hasShownEnergyCutsceneRef.current) {
@@ -612,7 +674,8 @@ export default function GamePage() {
     try {
       setEnergyRemaining(level.requiredEnergy || 0)
       let remainingEnergy = level.requiredEnergy || 0
-      const { expanded: expandedCommands, commandCount } = prepareCommands()
+      const { expanded: expandedCommands, commandCount, moveCount } = prepareCommands()
+      const totalMovesPlanned = moveCount
       setIsPlaying(true)
       setError('')
 
@@ -659,7 +722,7 @@ export default function GamePage() {
               timeTaken: getTimeTaken(),
               failureType: 'void',
             })
-            gameEngineRef.current?.showNotification('GAME OVER', 0xff4444, 'defeat')
+            setShowVoidGameOver(true)
             return
           }
 
@@ -675,7 +738,7 @@ export default function GamePage() {
               timeTaken: getTimeTaken(),
               failureType: 'snake',
             })
-            gameEngineRef.current?.showNotification('GAME OVER', 0xff4444, 'defeat')
+            setShowSnakeGameOver(true)
             return
           }
 
@@ -721,6 +784,12 @@ export default function GamePage() {
                       moves: movesCount,
                     })
                   }
+                } else {
+                  addOfflineProgress({
+                    level: 1,
+                    timeTaken: getTimeTaken(),
+                    moves: movesCount,
+                  })
                 }
 
                 gameEngineRef.current?.showNotification('Felicitaciones\nNivel superado', 0x00ff99, 'victory')
@@ -743,12 +812,21 @@ export default function GamePage() {
               return
             }
 
-            const requiresSingleCommand = currentLevel >= 11 && currentLevel <= 15
+            const requiresSingleCommand = currentLevel >= 14 && currentLevel <= 20
             if (requiresSingleCommand && commandCount !== 1) {
               stopTimer()
               setError('Hazlo en un solo comando para superar este nivel.')
               setIsPlaying(false)
               gameEngineRef.current?.showNotification('\nEncuentra el patron\nHazlo en solo \n 1 COMANDO', 0xff4444, 'defeat')
+              return
+            }
+
+            const exactMovesRequired = level.exactMoveCount
+            if (typeof exactMovesRequired === 'number' && totalMovesPlanned !== exactMovesRequired) {
+              stopTimer()
+              setError(`Debes completar este nivel en exactamente ${exactMovesRequired} movimientos.`)
+              setIsPlaying(false)
+              gameEngineRef.current?.showNotification(`\nHazlo en\n${exactMovesRequired} MOVIMIENTOS`, 0xff4444, 'defeat')
               return
             }
 
@@ -811,39 +889,61 @@ export default function GamePage() {
     return elapsedTime
   }
 
-  const levelInfo = level ? {
+  const levelInfo: {
+    energyRequired: number
+    totalEnergy?: number
+    timeLimit: number | null
+    hasGuideLines: boolean
+    allowsLoops: boolean
+    exactMoveCount?: number
+  } = level ? {
     energyRequired: energyRemaining,
     totalEnergy: level.requiredEnergy,
     timeLimit: timerMode === 'countdown' ? (timeLimitRef.current ?? level.timeLimit ?? null) : null,
     hasGuideLines: level.hasGuideLines,
-    allowsLoops: level.allowsLoops
-  } : {}
+    allowsLoops: level.allowsLoops,
+    exactMoveCount: level.exactMoveCount,
+  } : {
+    energyRequired: 0,
+    totalEnergy: undefined,
+    timeLimit: null,
+    hasGuideLines: false,
+    allowsLoops: false,
+    exactMoveCount: undefined,
+  }
 
-  const isAdvancedLoopLevel = Boolean(level && level.level >= 11)
+  const isAdvancedLoopLevel = Boolean(level && level.level >= 14)
 
-  const introModalContainerClass =
-    level && (level.level === 4 || level.level === 11)
+  const introModalBaseClass =
+    level && (level.level === 4 || level.level === 14)
       ? 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-red-500/60 bg-gradient-to-br from-[#5a0412] via-[#a6101f] to-[#ff5722] shadow-[0_0_65px_rgba(248,113,113,0.6)] flex flex-col'
       : level && (level.level === 7 || level.level === 9)
         ? 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-blue-500/60 bg-gradient-to-br from-[#051235] via-[#0c2ed1] to-[#21d4fd] shadow-[0_0_65px_rgba(59,130,246,0.55)] flex flex-col'
       : 'relative w-full max-w-3xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)] flex flex-col'
 
+  const introModalMinHeightClass =
+    level && (level.level === 1 || level.level === 2 || level.level === 4 || level.level === 11 || level.level === 14)
+      ? 'min-h-[744px]'
+      : 'min-h-[620px]'
+
+  const introModalContainerClass = `${introModalBaseClass} ${introModalMinHeightClass}`
+
   const introModalGlowTopClass =
-    level && (level.level === 4 || level.level === 11)
+    level && (level.level === 4 || level.level === 14)
       ? 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-red-500/80 blur-2xl animate-pulse'
       : level && (level.level === 7 || level.level === 9)
         ? 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-blue-400/80 blur-2xl animate-pulse'
       : 'absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse'
 
   const introModalGlowBottomClass =
-    level && (level.level === 4 || level.level === 11)
+    level && (level.level === 4 || level.level === 14)
       ? 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-orange-500/80 blur-2xl animate-pulse delay-300'
       : level && (level.level === 7 || level.level === 9)
         ? 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-cyan-400/80 blur-2xl animate-pulse delay-300'
       : 'absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-purple-500/40 blur-3xl animate-pulse delay-300'
 
   return (
-    <div className="min-h-screen bg-ninja-dark text-white">
+    <div className="game-page-container min-h-screen bg-ninja-dark text-white">
       {/* Audio de fondo */}
       <audio ref={audioRef} src={ninjaGameBgm} loop hidden />
       {/* Header */}
@@ -858,7 +958,7 @@ export default function GamePage() {
 
           <div className="flex items-center gap-4">
             <div className="text-sm">
-              Nivel: <span className="font-bold text-blue-400">{currentLevel}/15</span>
+              Nivel: <span className="font-bold text-blue-400">{currentLevel}/20</span>
             </div>
             {currentUser && (
               <div className="text-sm">
@@ -896,22 +996,22 @@ export default function GamePage() {
               <p className="text-sm text-gray-300">Inicia sesión para acceder a todos los niveles.</p>
             ) : (
               <div className="grid grid-cols-5 gap-2">
-                {Array.from({ length: 15 }, (_, i) => {
+                {Array.from({ length: 20 }, (_, i) => {
                   const levelNumber = i + 1
                   const isCompleted = completedLevels.includes(levelNumber)
                   const isUnlocked = maxLevelCompleted !== null && (maxLevelCompleted === 0 ? levelNumber === 1 : levelNumber <= maxLevelCompleted + 1)
                   
                   return (
-                    <button
-                      key={levelNumber}
-                      onClick={() => {
-                        setShowCompletedModal(false)
+                  <button
+                    key={levelNumber}
+                    onClick={() => {
+                      setShowCompletedModal(false)
                         manualLevelSelectionRef.current = true
-                        void loadLevel(levelNumber)
-                      }}
+                      void loadLevel(levelNumber)
+                    }}
                       disabled={!isUnlocked}
-                      className={`
-                        w-12 h-12 rounded-lg flex items-center justify-center font-bold text-sm
+                    className={`
+                      w-12 h-12 rounded-lg flex items-center justify-center font-bold text-sm
                         transition-colors duration-200
                         ${isUnlocked
                           ? isCompleted
@@ -921,9 +1021,9 @@ export default function GamePage() {
                         }
                       `}
                       title={isUnlocked ? (isCompleted ? `Nivel ${levelNumber} completado` : `Jugar nivel ${levelNumber}`) : 'Nivel bloqueado'}
-                    >
-                      {levelNumber}
-                    </button>
+                  >
+                    {levelNumber}
+                  </button>
                   )
                 })}
               </div>
@@ -992,7 +1092,7 @@ export default function GamePage() {
                 {introTitle}
               </h2>
               <div className="flex flex-col items-center gap-2">
-                <p className="text-lg text-emerald-200 max-w-xl mx-auto">
+                <p className="text-lg text-emerald-200 max-w-lg mx-auto">
                   {introMessage}
                 </p>
                 {/* Mostrar imagen de objetivo según el nivel */}
@@ -1262,11 +1362,91 @@ export default function GamePage() {
                 </div>
               )}
 
-              {/* Modal de Loops para nivel 11 */}
+              {/* Modal para nivel 11: Retos de precisión */}
               {currentLevel === 11 && (
+                <div className="flex flex-col items-center gap-4 py-2">
+                  <div className="relative max-w-lg w-full mx-auto">
+                    <div className="relative bg-gradient-to-br from-amber-900/90 via-orange-800/85 to-red-900/90 rounded-2xl border-2 border-amber-400/60 shadow-[0_0_30px_rgba(251,191,36,0.45)] p-6 overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/25 to-transparent rounded-2xl shimmer-effect pointer-events-none" />
+                      <div className="relative flex flex-col items-center gap-4">
+                        <h3 className="text-xl font-extrabold text-amber-100 drop-shadow-[0_0_16px_rgba(251,191,36,0.6)] uppercase tracking-wide text-center">
+                          Nivel 11, 12 Y 13: Retos de Precisión
+                        </h3>
+                        <p className="text-base text-amber-200 text-center">
+                          Estos niveles tienen reglas especiales y un tiempo limitado. Lee atentamente las instrucciones a continuación.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Reglas principales */}
+                  <div className="w-full max-w-lg space-y-3">
+                    {/* Regla 1: Número exacto de movimientos */}
+                    <div className="bg-gradient-to-r from-blue-900/60 to-blue-800/60 rounded-xl border border-blue-400/40 p-4 shadow-lg">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-2xl">🎯</span>
+                        <h4 className="text-base font-bold text-blue-200">Movimientos Exactos</h4>
+                      </div>
+                      <p className="text-sm text-blue-100 text-left mb-1">
+                        <strong className="text-blue-200">Nivel 11:</strong> completa exactamente en <strong className="text-blue-200">8 comandos</strong>.
+                      </p>
+                      <p className="text-sm text-blue-100 text-left">
+                        <strong className="text-blue-200">Nivel 12:</strong> completa exactamente en <strong className="text-blue-200">9 comandos</strong>.
+                      </p>
+                      <p className="text-sm text-blue-100 text-left">
+                        <strong className="text-blue-200">Nivel 13:</strong> completa exactamente en <strong className="text-blue-200">10 comandos</strong>.
+                      </p>
+                    </div>
+
+                    {/* Regla 2: No repetir comandos consecutivos */}
+                    <div className="bg-gradient-to-r from-red-700/60 to-red-800/60 rounded-xl border border-red-400/40 p-4 shadow-lg">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-2xl">⚠️</span>
+                        <h4 className="text-base font-bold text-red-200">¡No Dividas Comandos!</h4>
+                      </div>
+                      <p className="text-sm text-red-100 text-left mb-2">
+                        <strong className="text-red-200">No puedes repetir el mismo comando consecutivamente.</strong>
+                      </p>
+                      <div className="bg-black/40 rounded-lg p-3 border border-red-500/50 mb-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-red-400">❌</span>
+                          <code className="text-red-300 font-mono text-sm">D1,B1,D9,B3,B4</code>
+                        </div>
+                        <p className="text-xs text-red-200 ml-6 mb-2">
+                          Esto cuenta como 5 comandos, pero <strong>B3,B4 es una trampa</strong>
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-emerald-400">✓</span>
+                          <code className="text-emerald-300 font-mono text-sm">D1,B1,D9,B7</code>
+                        </div>
+                        <p className="text-xs text-emerald-200 ml-6">
+                          <strong>Correcto:</strong> B3,B4 debe ser B7 en un solo comando
+                        </p>
+                      </div>
+                      <p className="text-xs text-red-200 text-left mt-2">
+                        Si intentas dividir un comando, el sistema te mostrará un error indicando que debes combinarlo en uno solo.
+                      </p>
+                    </div>
+
+                    {/* Regla 5: Líneas guía */}
+                    <div className="bg-gradient-to-r from-emerald-900/60 to-emerald-800/60 rounded-xl border border-emerald-400/40 p-4 shadow-lg">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-2xl">💡</span>
+                        <h4 className="text-base font-bold text-emerald-200">Líneas Guía Disponibles</h4>
+                      </div>
+                      <p className="text-sm text-emerald-100 text-left">
+                        Las <strong className="text-emerald-200">líneas guía vuelven</strong> para ayudarte a visualizar tu ruta en los SOLO PARA LOS NIVELES 11 Y 12, mientras escribes los comandos.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal de Loops para nivel 14 */}
+              {currentLevel === 14 && (
                 <div className="flex flex-col items-center gap-3 py-2">
                   {/* Mensaje destacado sobre tiempo y movimientos */}
-                  <div className="relative max-w-lg w-full mx-auto">
+                  <div className="relative max-w-3xl w-full mx-auto">
                     <div className="relative bg-gradient-to-br from-purple-900/90 via-indigo-900/85 to-purple-900/90 rounded-2xl border-2 border-purple-400/60 shadow-[0_0_30px_rgba(168,85,247,0.45)] p-6 overflow-hidden">
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-400/25 to-transparent rounded-2xl shimmer-effect pointer-events-none" />
                       <div className="relative flex items-center gap-4 justify-center">
@@ -1393,7 +1573,7 @@ export default function GamePage() {
       {/* Modal de explicación de registro (después de completar nivel 3 sin sesión) */}
       {showRegistrationExplanationModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur p-4">
-          <div className="relative w-full max-w-2xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)] flex flex-col">
+          <div className="relative w-full max-w-2xl max-h-[90vh] mx-6 overflow-hidden rounded-3xl border border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)] flex flex-col min-h-[744px]">
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute -top-16 -left-10 h-48 w-48 rounded-full bg-emerald-500/40 blur-3xl animate-pulse" />
               <div className="absolute -bottom-12 -right-10 h-56 w-56 rounded-full bg-purple-500/40 blur-3xl animate-pulse delay-300" />
@@ -1411,7 +1591,7 @@ export default function GamePage() {
               </h2>
 
               <div className="flex flex-col items-center gap-4 py-2">
-                <p className="text-lg text-emerald-200 max-w-xl mx-auto">
+                <p className="text-lg text-emerald-200 max-w-lg mx-auto">
                   Has completado los primeros 3 niveles. Para continuar y desbloquear todas las características del juego, necesitas crear una cuenta.
                 </p>
 
@@ -1580,8 +1760,18 @@ export default function GamePage() {
                   </div>
                   <div className="flex items-center gap-2.5 text-emerald-200">
                     <span role="img" aria-label="moves" className="text-base">🦶</span>
-                    <span className="flex-1">Movimientos: <span className="font-semibold text-white">{movesCount}</span></span>
+                    <span className="flex-1">
+                      Movimientos:{' '}
+                      <span className="font-semibold text-white">
+                        {levelInfo.exactMoveCount ? `${movesCount}/${levelInfo.exactMoveCount}` : movesCount}
+                      </span>
+                    </span>
                   </div>
+                  {levelInfo.exactMoveCount && (
+                    <div className="ml-7 text-xs text-amber-200">
+                      Debes alcanzar exactamente {levelInfo.exactMoveCount} movimientos.
+                    </div>
+                  )}
                   {typeof levelInfo.timeLimit === 'number' && (
                     <div className="flex items-center gap-2.5 text-blue-200">
                       <span className="flex-1">Tiempo límite: <span className="font-semibold text-white">{formatTime(levelInfo.timeLimit)}</span></span>
@@ -1672,10 +1862,16 @@ export default function GamePage() {
               <textarea
                 value={commands}
                 onChange={(e) => setCommands(e.target.value)}
-                placeholder={level && level.level >= 11 && level.level <= 15 ? "Ej: (D1,S1)x3" : "Ej: D3,S2,I1"}
-                className="ninja-input w-full h-24 resize-none"
+                placeholder={level && level.level >= 14 && level.level <= 20 ? "Ej: (D1,S1)x3" : "Ej: D3,S2,I1"}
+                className={`ninja-input w-full resize-none ${level && (level.level === 11 || level.level === 12) ? 'h-32' : 'h-24'}`}
                 disabled={isPlaying || Boolean(level && level.level <= 3)}
               />
+
+              {level?.exactMoveCount && (
+                <p className="mt-2 text-xs text-amber-200 font-semibold tracking-wide">
+                  Debes completar este nivel en exactamente {level.exactMoveCount} movimientos.
+                </p>
+              )}
 
               {error && (
                 <div className="mt-2 text-sm font-semibold text-red-400">
@@ -1750,16 +1946,10 @@ export default function GamePage() {
               muted
               playsInline
               className="w-full h-full object-contain rounded-lg"
-              onEnded={() => {
-                setShowSnakeGameOver(false)
-                resetLevel()
-              }}
+              onEnded={handleSnakeGameOverClose}
             />
             <button
-              onClick={() => {
-                setShowSnakeGameOver(false)
-                resetLevel()
-              }}
+              onClick={handleSnakeGameOverClose}
               className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
             >
               Continuar
@@ -1800,16 +1990,10 @@ export default function GamePage() {
               muted
               playsInline
               className="w-full h-full object-contain rounded-lg"
-              onEnded={() => {
-                setShowVoidGameOver(false)
-                resetLevel()
-              }}
+              onEnded={handleVoidGameOverClose}
             />
             <button
-              onClick={() => {
-                setShowVoidGameOver(false)
-                resetLevel()
-              }}
+              onClick={handleVoidGameOverClose}
               className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
             >
               Continuar
@@ -1820,19 +2004,25 @@ export default function GamePage() {
 
       {showFinalCelebration && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur">
-          <div className={`relative w-full max-w-3xl mx-6 overflow-hidden rounded-3xl border ${pendingLevelAfterCelebration ? 'border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)]' : 'border-yellow-500/60 bg-gradient-to-br from-[#140032] via-[#36009b] to-[#ff7300] shadow-[0_0_65px_rgba(255,175,0,0.6)]'}`}>
+          <div
+            className={`relative w-full max-w-3xl mx-6 overflow-hidden rounded-3xl border ${
+              pendingLevelAfterCelebration
+                ? 'border-emerald-400/40 bg-gradient-to-br from-purple-900/90 via-slate-900/90 to-emerald-900/80 shadow-[0_0_45px_rgba(56,189,248,0.45)]'
+                : 'border-yellow-500/60 bg-gradient-to-br from-[#140032] via-[#36009b] to-[#ff7300] shadow-[0_0_65px_rgba(255,175,0,0.6)]'
+            } ${pendingLevelAfterCelebration ? 'min-h-[520px]' : 'min-h-[524px]'}`}
+          >
             <div className="absolute inset-0 pointer-events-none">
               <div className={`absolute -top-16 -left-10 h-48 w-48 rounded-full ${pendingLevelAfterCelebration ? 'bg-emerald-500/40' : 'bg-[#ffbf00]/70'} blur-3xl animate-pulse`} />
               <div className={`absolute -bottom-12 -right-10 h-56 w-56 rounded-full ${pendingLevelAfterCelebration ? 'bg-purple-500/40' : 'bg-[#ff0099]/60'} blur-3xl animate-pulse delay-300`} />
             </div>
 
-            <div className="relative px-10 py-12 text-center space-y-6">
+            <div className={`relative px-10 ${pendingLevelAfterCelebration ? 'py-10' : 'py-12'} text-center space-y-6`}>
               <h2 className={`text-3xl sm:text-4xl font-extrabold drop-shadow-[0_0_25px_rgba(255,255,255,0.7)] ${pendingLevelAfterCelebration ? 'text-white' : 'text-yellow-200'}`}>
                 {pendingLevelAfterCelebration ? '¡Felicidades, Ninja!' : '¡Leyenda absoluta del código!'}
               </h2>
-              <p className={`text-lg max-w-xl mx-auto ${pendingLevelAfterCelebration ? 'text-emerald-200' : 'text-yellow-100'}`}>
+              <p className={`text-lg max-w-lg mx-auto ${pendingLevelAfterCelebration ? 'text-emerald-200' : 'text-yellow-100'}`}>
                 {pendingLevelAfterCelebration
-                  ? 'Has dominado los 14 niveles iniciales. Un reto de un solo comando te espera. ¡Inténtalo, supéralo y sorpréndete!'
+                  ? 'Has dominado los 19 niveles iniciales. Un reto de un solo comando te espera. ¡Inténtalo, supéralo y sorpréndete!'
                   : '¡Eres el mejor! Domaste el nivel más difícil. Tu ADN programador está en la cima; creatividad y lógica hechas leyenda.'}
               </p>
               <div className="relative mx-auto flex flex-col items-center gap-4">
@@ -1842,7 +2032,7 @@ export default function GamePage() {
                     <span className={`text-4xl ${pendingLevelAfterCelebration ? '' : 'animate-pulse text-yellow-200 drop-shadow-[0_0_20px_rgba(255,215,0,0.7)]'}`}>🧬</span>
                   </div>
                 </div>
-                <p className={`text-base max-w-md ${pendingLevelAfterCelebration ? 'text-purple-200' : 'text-yellow-100'}`}>
+                <p className={`text-base max-w-lg ${pendingLevelAfterCelebration ? 'text-purple-200' : 'text-yellow-100'}`}>
                   Tu ADN programador ha sido analizado: creatividad + lógica en perfecto equilibrio. Estás listo para retos aún mayores.
                 </p>
               </div>

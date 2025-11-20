@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsOptional, IsPositive } from 'class-validator';
+import { IsOptional, IsPositive, IsString } from 'class-validator';
 
 export class PaginationDto {
   @ApiProperty({
@@ -24,4 +24,14 @@ export class PaginationDto {
   @IsOptional()
   @Type(() => Number)
   limit: number = 10;
+
+  @ApiProperty({
+    example: 'Enrique',
+    required: false,
+    type: String,
+    description: 'Optional search by user first or last name',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

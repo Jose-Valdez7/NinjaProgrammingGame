@@ -53,6 +53,7 @@ export interface GameLevel {
   timeLimit?: number
   hasGuideLines: boolean
   allowsLoops: boolean
+  exactMoveCount?: number
 }
 
 export interface GameState {
