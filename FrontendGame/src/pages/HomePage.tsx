@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Play, Trophy, Settings, Info, BookOpen, Gamepad2 } from 'lucide-react'
 import nivelesBg from '@/assets/images/backgrounds/fondo-niveles.png'
 import katanaImg from '@/assets/images/icons/katanas.png'
@@ -8,6 +8,7 @@ import { apiUrl, getAuthHeaders, authStorage } from '../config/env'
 import { StorySequence } from '../components/StorySequence'
 import logo from '@/assets/images/icons/logo.png'
 import fondo from '@/assets/images/backgrounds/fondo.png'
+import fightVideo from '@/assets/images/gameoverscreens/Fight.mp4'
 
 export default function HomePage() {
   const [showStory, setShowStory] = useState(false);
@@ -15,11 +16,13 @@ export default function HomePage() {
   const [isLoadingStory, setIsLoadingStory] = useState(false);
   const [showLevels, setShowLevels] = useState(false);
   const [showHowTo, setShowHowTo] = useState(false);
+  const [showFightVideo, setShowFightVideo] = useState(false);
   const [isLoadingProgress, setIsLoadingProgress] = useState(false);
   const [progressError, setProgressError] = useState<string | null>(null);
   const [maxLevelCompleted, setMaxLevelCompleted] = useState<number>(0);
 
   const { currentUser } = useGameStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Verificar si el usuario ya vio la historia en esta sesión
@@ -48,6 +51,15 @@ export default function HomePage() {
       setShowStory(true);
       setIsLoadingStory(false);
     }, 1000);
+  };
+
+  const handleFightVideoEnd = useCallback(() => {
+    setShowFightVideo(false);
+    navigate('/game');
+  }, [navigate]);
+
+  const handlePlayNow = () => {
+    setShowFightVideo(true);
   };
 
   const loadUserProgress = useCallback(
@@ -197,13 +209,13 @@ export default function HomePage() {
               {hasSeenStory ? 'Ver Historia' : 'Ver Historia Nuevamente'}
             </button>
             
-            <Link 
-              to="/game" 
+            <button 
+              onClick={handlePlayNow}
               className="ninja-button inline-flex items-center gap-3 text-lg px-8 py-4"
             >
               <Play size={24} />
               Jugar Ahora
-            </Link>
+            </button>
 
             <button 
               onClick={() => setShowLevels(true)}
@@ -379,6 +391,18 @@ export default function HomePage() {
         )}
 
       </div>
+      {showFightVideo && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90">
+          <video
+            src={fightVideo}
+            autoPlay
+            playsInline
+            onEnded={handleFightVideoEnd}
+            onError={handleFightVideoEnd}
+            className="w-full h-full max-w-4xl max-h-[90vh] object-contain rounded-2xl shadow-[0_0_45px_rgba(255,255,255,0.35)]"
+          />
+        </div>
+      )}
     </div>
   )
 }
