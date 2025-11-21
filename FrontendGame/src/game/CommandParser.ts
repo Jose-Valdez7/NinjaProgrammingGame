@@ -262,6 +262,7 @@ export class CommandParser {
       
       // Validar bucles con repetición mínima para niveles 14-20
       if (options.level !== undefined && options.level >= 14 && options.level <= 20) {
+        let hasLoop = false
         for (const cmd of commands) {
           if ('repetitions' in cmd && cmd.repetitions < 2) {
             return {
@@ -269,10 +270,13 @@ export class CommandParser {
               error: 'Comando incorrecto: debe repetirse por lo menos 2 veces',
             }
           }
+          if ('repetitions' in cmd) {
+            hasLoop = true
+          }
         }
         
         // Validar que el bucle termine exactamente en el portal
-        if (options.startPosition && options.doorPosition) {
+        if (hasLoop && options.startPosition && options.doorPosition) {
           const finalPosition = this.calculateFinalPosition(commands, options.startPosition)
           if (finalPosition.x !== options.doorPosition.x || finalPosition.y !== options.doorPosition.y) {
             return {

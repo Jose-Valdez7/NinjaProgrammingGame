@@ -345,6 +345,10 @@ export default function GamePage() {
       setIntroTitle('Nivel 14: ¡Bucles!')
       setIntroMessage('¡Ahora puedes usar bucles! Repite secuencias de comandos con (comandos)xN')
       setShowIntroModal(true)
+    } else if (levelNumber === 18) {
+      setIntroTitle('Nivel 18: Sin líneas guía')
+      setIntroMessage('¡Atención! Desde este nivel las líneas guía desaparecen nuevamente. Visualiza el camino y planifica tus bucles sin ayuda.')
+      setShowIntroModal(true)
     } else {
       setShowIntroModal(false)
     }
@@ -1349,6 +1353,59 @@ export default function GamePage() {
                             <path
                               d="M 20 30 L 250 30"
                               stroke="#ffd700"
+                              strokeWidth="2"
+                              fill="none"
+                              strokeLinecap="round"
+                              opacity="0.5"
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal para nivel 18 - Líneas guía desaparecen nuevamente */}
+              {currentLevel === 18 && (
+                <div className="flex flex-col items-center gap-4 py-2">
+                  <div className="relative max-w-lg w-full mx-auto">
+                    <div className="relative bg-gradient-to-br from-[#1a0633]/95 via-[#36106b]/90 to-[#5c1fb5]/85 rounded-2xl border-2 border-purple-400/60 shadow-[0_0_35px_rgba(168,85,247,0.5)] p-6 overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-400/25 to-transparent rounded-2xl shimmer-effect pointer-events-none" />
+                      <div className="relative flex flex-col items-center gap-4">
+                        <h3 className="text-xl font-extrabold uppercase tracking-wide text-center drop-shadow-[0_0_18px_rgba(168,85,247,0.7)]">
+                          <span className="text-fuchsia-200">Nivel 18:</span> <span className="text-cyan-200">sin líneas guía</span>
+                        </h3>
+                        <p className="text-base text-center text-purple-100 drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">
+                          Entraste al tramo final. Desde aquí y hasta el nivel 20 tendrás que{" "}
+                          <strong className="text-white">planear tus bucles sin ayuda visual</strong>.
+                        </p>
+                        <p className="text-sm text-indigo-100 text-center">
+                          Analiza el mapa, dibuja tu estrategia y recuerda que <strong>cada comando cuenta</strong>.
+                        </p>
+
+                        <div className="w-full max-w-md mt-2">
+                          <svg width="100%" height="60" viewBox="0 0 300 60" className="overflow-visible">
+                            <path
+                              d="M 20 30 L 250 30"
+                              stroke="#f4a900"
+                              strokeWidth="4"
+                              fill="none"
+                              strokeLinecap="round"
+                              opacity="0.9"
+                            />
+                            <path
+                              d="M 250 30 L 235 20 M 250 30 L 235 40"
+                              stroke="#f4a900"
+                              strokeWidth="4"
+                              fill="none"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              opacity="0.9"
+                            />
+                            <path
+                              d="M 20 30 L 250 30"
+                              stroke="#f4a900"
                               strokeWidth="2"
                               fill="none"
                               strokeLinecap="round"
